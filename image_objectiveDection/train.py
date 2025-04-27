@@ -133,7 +133,8 @@ def train(train_distortion=None):
                     obj_loss = 1.0 * obj_loss
                     cls_loss = 1.0 * cls_loss
 
-                    loss += loc_loss + obj_loss + cls_loss
+                    loss = loss + loc_loss + obj_loss + cls_loss
+
 
             loss.backward()
             optimizer.step()
