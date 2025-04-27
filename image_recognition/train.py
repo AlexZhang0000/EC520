@@ -5,8 +5,23 @@ import torch.optim as optim
 from config import Config
 from dataloader import get_loader
 from model import ResNet18
+import argparse
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--distortion', type=str, default=None,
+                        help="Distortion format: gaussianblur:kernel_size,sigma/...")
+    return parser.parse_args()
+
+def make_suffix(distortion, mode):
+    if distortion is None:
+        return ''
+    clean_distortion = distortion.replace('/', '_').replace(':', '_').replace(',', '_')
+    return f"_{mode}_{clean_distortion}"
 
 def train():
+    args = parse_args()
+
     # Set random seed
     torch.manual_seed(Config.seed)
     if torch.cuda.is_available():
@@ -17,8 +32,8 @@ def train():
     os.makedirs(Config.results_save_path, exist_ok=True)
 
     # Prepare data loaders
-    train_loader = get_loader(Config.train_data_dir, batch_size=Config.batch_size, mode='train')
-    val_loader = get_loader(Config.test_data_dir, batch_size=Config.batch_size, mode='val')
+    train_loader = get_loader(Config.train_data_dir, batch_size=Config.batch_size, mode='train', distortion=args.distortion)
+    val_loader = get_loader(Config.test_data_dir, batch_size=Config.batch_size, mode='val', distortion=args.distortion)
 
     # Create model
     model = ResNet18(num_classes=Config.num_classes).to(Config.device)
@@ -29,6 +44,8 @@ def train():
                           momentum=Config.momentum, weight_decay=Config.weight_decay)
 
     best_val_acc = 0.0
+
+    save_suffix = make_suffix(args.distortion, 'train')
 
     # Training loop
     for epoch in range(1, Config.num_epochs + 1):
@@ -84,10 +101,12 @@ def train():
         # Save best model
         if val_acc > best_val_acc:
             best_val_acc = val_acc
-            torch.save(model.state_dict(), os.path.join(Config.model_save_path, 'best_model.pth'))
+            save_name = f"best_model{save_suffix}.pth"
+            torch.save(model.state_dict(), os.path.join(Config.model_save_path, save_name))
 
     print('Training finished.')
 
 if __name__ == '__main__':
     train()
+
 
