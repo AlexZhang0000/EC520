@@ -120,8 +120,9 @@ def train(train_distortion=None):
             for imgs, targets, labels in val_loader:
                 imgs = imgs.to(Config.device)
                 preds = model(imgs)
-                preds_all.extend(preds)
-                targets_all.extend(targets)
+                for pred, target_list in zip(preds, targets):
+                    preds_all.append(pred)
+                    targets_all.append(target_list)
 
         mAP, precision, recall = compute_map(preds_all, targets_all)
 
@@ -142,6 +143,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     train(train_distortion=args.train_distortion)
+
 
 
 
