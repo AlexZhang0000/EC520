@@ -82,7 +82,7 @@ def train(train_distortion=None):
                     pred_idx = (anchor_idx * feature_size * feature_size) + (grid_y * feature_size) + grid_x
 
                     pred_box = pred[pred_idx, :4]
-                    pred_obj = pred[pred_idx, 4]
+                    pred_obj = pred[pred_idx, 4].unsqueeze(0)
                     pred_cls = pred[pred_idx, 5:]
 
                     # ground truth box (cx,cy,w,h)
