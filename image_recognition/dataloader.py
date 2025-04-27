@@ -44,19 +44,18 @@ class CIFAR10Dataset(Dataset):
                 transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
             ])
 
-    def _load_batch(self, batch_file):
-        with open(batch_file, 'rb') as f:
-            batch = pickle.load(f, encoding='bytes')
-            data = batch[b'data']
-            labels = batch[b'labels']
+def _load_batch(self, batch_file):
+    with open(batch_file, 'rb') as f:
+        batch = pickle.load(f, encoding='bytes')
+        data = batch[b'data']
+        labels = batch[b'labels']
 
-            data = data.reshape(-1, 3, 32, 32)  # 还原成(N, C, H, W)格式
-            data = np.transpose(data, (0, 2, 3, 1))  # 转成(N, H, W, C) for transforms
+        data = data.reshape(-1, 3, 32, 32)  # 还原成(N, C, H, W)格式
+        data = np.transpose(data, (0, 2, 3, 1))  # 转成(N, H, W, C)
 
-            self.data.append(data)
-            self.labels.extend(labels)
+        self.data.append(data)
+        self.labels.extend(labels)
 
-        self.data = np.vstack(self.data)  # 合并成一个大数组
 
     def __len__(self):
         return len(self.labels)
