@@ -10,12 +10,21 @@ from utils import compute_map, set_seed
 
 def map_target_to_feature(target, feature_size, img_size):
     """
-    Map ground truth (cx, cy) to feature map (grid x, grid y) index.
+    Map ground truth (x1, y1, x2, y2) to feature map (grid_x, grid_y) index.
+    防止grid越界。
     """
-    cx, cy, w, h = target  # target 是 (cx, cy, w, h)
+    x1, y1, x2, y2 = target  # 输入是 (x1, y1, x2, y2)
+    cx = (x1 + x2) / 2
+    cy = (y1 + y2) / 2
+
     scale = feature_size / img_size
     grid_x = int(cx * scale)
     grid_y = int(cy * scale)
+
+    # 防止grid越界（比如x=img_size边界）
+    grid_x = max(0, min(grid_x, feature_size - 1))
+    grid_y = max(0, min(grid_y, feature_size - 1))
+
     return grid_x, grid_y
 
 def train(train_distortion=None):
@@ -31,7 +40,12 @@ def train(train_distortion=None):
     bce_loss = nn.BCEWithLogitsLoss()
     mse_loss = nn.MSELoss()
 
-    optimizer = optim.SGD(model.parameters(), lr=Config.learning_rate, momentum=Config.momentum, weight_decay=Config.weight_decay)
+    optimizer = optim.SGD(
+        model.parameters(),
+        lr=Config.learning_rate,
+        momentum=Config.momentum,
+        weight_decay=Config.weight_decay
+    )
 
     best_map = 0.0
 
@@ -61,7 +75,7 @@ def train(train_distortion=None):
 
                 grid_x, grid_y = map_target_to_feature(target, feature_size, img_size)
 
-                anchor_idx = 0  # 简化版：只用第0个anchor（每个grid有3个anchor）
+                anchor_idx = 0  # 简化版：只用第0个anchor
 
                 pred_idx = (anchor_idx * feature_size * feature_size) + (grid_y * feature_size) + grid_x
 
@@ -70,7 +84,13 @@ def train(train_distortion=None):
                 pred_cls = pred[pred_idx, 5:]
 
                 # ground truth
-                true_box = target.to(Config.device)
+                x1, y1, x2, y2 = target
+                cx = (x1 + x2) / 2
+                cy = (y1 + y2) / 2
+                w = (x2 - x1)
+                h = (y2 - y1)
+                true_box = torch.tensor([cx, cy, w, h], device=Config.device)
+
                 true_obj = torch.ones(1, device=Config.device)
                 true_cls = torch.nn.functional.one_hot(label, Config.num_classes).float().to(Config.device)
 
@@ -117,6 +137,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     train(train_distortion=args.train_distortion)
+
 
 
 
