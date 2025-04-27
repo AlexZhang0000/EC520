@@ -6,13 +6,9 @@ import torch.nn as nn
 from config import Config
 from dataloader import get_loader
 from model import YOLOv5Backbone
-from utils import compute_map, set_seed
+from utils import compute_map, set_seed, CIoULoss
 
 def map_target_to_feature(target, feature_size, img_size):
-    """
-    Map ground truth (x1, y1, x2, y2) to feature map (grid_x, grid_y) index.
-    防止grid越界。
-    """
     x1, y1, x2, y2 = target
     cx = (x1 + x2) / 2
     cy = (y1 + y2) / 2
@@ -37,7 +33,7 @@ def train(train_distortion=None):
     model = YOLOv5Backbone(num_classes=Config.num_classes).to(Config.device)
 
     bce_loss = nn.BCEWithLogitsLoss()
-    mse_loss = nn.MSELoss()
+    ciou_loss = CIoULoss()
 
     optimizer = optim.SGD(
         model.parameters(),
@@ -55,7 +51,7 @@ def train(train_distortion=None):
         for imgs, targets, labels in train_loader:
             imgs = imgs.to(Config.device)
             optimizer.zero_grad()
-            preds = model(imgs)  # preds shape: (batch, 1200, 5+num_classes)
+            preds = model(imgs)
 
             loss = 0.0
             batch_size = imgs.size(0)
@@ -73,9 +69,9 @@ def train(train_distortion=None):
                     label = label_list[obj_idx]
 
                     if label < 0:
-                        continue  # 跳过非法label
+                        continue
 
-                    feature_size = 20
+                    feature_size = 40
                     img_size = Config.img_size
 
                     grid_x, grid_y = map_target_to_feature(target, feature_size, img_size)
@@ -88,7 +84,6 @@ def train(train_distortion=None):
                     pred_obj = pred[pred_idx, 4].unsqueeze(0)
                     pred_cls = pred[pred_idx, 5:]
 
-                    # ground truth box (cx,cy,w,h)
                     x1, y1, x2, y2 = target
                     cx = (x1 + x2) / 2
                     cy = (y1 + y2) / 2
@@ -99,7 +94,7 @@ def train(train_distortion=None):
                     true_obj = torch.ones(1, device=Config.device)
                     true_cls = torch.nn.functional.one_hot(label, Config.num_classes).float().to(Config.device)
 
-                    loc_loss = mse_loss(pred_box, true_box)
+                    loc_loss = ciou_loss(pred_box.unsqueeze(0), true_box.unsqueeze(0))
                     obj_loss = bce_loss(pred_obj, true_obj)
                     cls_loss = bce_loss(pred_cls, true_cls)
 
@@ -111,7 +106,6 @@ def train(train_distortion=None):
 
         avg_loss = total_loss / len(train_loader)
 
-        # 验证
         model.eval()
         preds_all = []
         targets_all = []
@@ -133,7 +127,7 @@ def train(train_distortion=None):
             save_filename = f"best_model{'_' + train_distortion if train_distortion else '_clean'}.pth"
             save_path = os.path.join(Config.model_save_path, save_filename)
             torch.save(model.state_dict(), save_path)
-            print(f"💾 Saved best model to {save_path}")
+           
 
     print("✅ Training finished.")
 
@@ -143,6 +137,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     train(train_distortion=args.train_distortion)
+
 
 
 
