@@ -11,7 +11,7 @@ import argparse
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--train_distortion', type=str, default=None,
-                        help="Distortion format for training data: gaussianblur:5,2.0 / gaussiannoise:0,0.1 / aliasing:4 / jpegcompression:20")
+                        help="Distortion format for training data")
     return parser.parse_args()
 
 def make_suffix(distortion):
@@ -30,11 +30,12 @@ def train():
 
     # Data loaders
     train_loader = get_loader(Config.data_root, batch_size=Config.batch_size, mode='train', distortion=args.train_distortion)
-    val_loader = get_loader(Config.data_root, batch_size=Config.batch_size, mode='val', distortion=None)  # val集干净
+    val_loader = get_loader(Config.data_root, batch_size=Config.batch_size, mode='val', distortion=None)
 
     model = UNet(n_classes=Config.num_classes).to(Config.device)
-    criterion = nn.CrossEntropyLoss(ignore_index=255)  # ✅修正这里
+    criterion = nn.CrossEntropyLoss(ignore_index=255)
     optimizer = optim.Adam(model.parameters(), lr=Config.learning_rate, weight_decay=Config.weight_decay)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.5)  # ✅ 每50轮降一半
 
     best_miou = 0.0
 
@@ -80,13 +81,15 @@ def train():
 
         print(f"Epoch [{epoch}/{Config.num_epochs}] | Train Loss: {train_loss:.4f} | Val mIoU: {val_miou:.4f}")
 
-        # Save best model
         if val_miou > best_miou:
             best_miou = val_miou
             save_name = f"best_model{save_suffix}.pth"
             torch.save(model.state_dict(), os.path.join(Config.model_save_path, save_name))
 
+        scheduler.step()  # ✅别忘了
+
     print('Training finished.')
 
 if __name__ == '__main__':
     train()
+
