@@ -24,11 +24,6 @@ def box_iou(box1, box2):
     return iou  # (N, M)
 
 def compute_map(preds_all, targets_all, iou_thresh=0.5):
-    """
-    Compute simplified mean AP, precision, recall.
-    preds_all: list of tensors, each is (N, 5+num_classes)
-    targets_all: list of ground-truth boxes (tensor or list of tensors)
-    """
     tp = 0
     fp = 0
     fn = 0
@@ -43,7 +38,10 @@ def compute_map(preds_all, targets_all, iou_thresh=0.5):
 
         if pred_mask.sum() == 0:
             if isinstance(targets, torch.Tensor):
-                fn += 1
+                if targets.ndim == 1 and targets.size(0) == 4:
+                    fn += 1
+                else:
+                    fn += len(targets)
             else:
                 fn += len(targets)
             continue
@@ -51,9 +49,12 @@ def compute_map(preds_all, targets_all, iou_thresh=0.5):
         pred_boxes = preds[pred_mask][..., :4]
         pred_boxes = decode_boxes(pred_boxes)
 
-        # 🔥 兼容单个Tensor和list情况
+        # 🔥 保证 true_boxes 一定是 (N, 4) 格式
         if isinstance(targets, torch.Tensor):
-            true_boxes = targets.unsqueeze(0).to(pred_boxes.device)  # 单个tensor，加一个batch维度
+            if targets.ndim == 1 and targets.size(0) == 4:
+                true_boxes = targets.unsqueeze(0).to(pred_boxes.device)  # (1,4)
+            else:
+                true_boxes = targets.to(pred_boxes.device)  # 已经是(N,4)
         else:
             true_boxes = torch.stack(targets).to(pred_boxes.device)
 
@@ -67,9 +68,10 @@ def compute_map(preds_all, targets_all, iou_thresh=0.5):
 
     precision = tp / (tp + fp + 1e-6)
     recall = tp / (tp + fn + 1e-6)
-    mAP = precision * recall  # 简单mAP (实际COCO是积分曲线)
+    mAP = precision * recall
 
     return mAP, precision, recall
+
 
 def decode_boxes(boxes):
     """
