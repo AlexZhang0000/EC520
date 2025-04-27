@@ -2,17 +2,17 @@ import torch
 import os
 
 class Config:
-    project_name = 'image_segmentation_ade20k_distortion'
+    project_name = 'oxford_pet_segmentation_distortion'
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     seed = 42
 
     # Dataset
-    data_root = './Data/ADE20K'
-    num_classes = 4  # 背景、建筑、树、人
+    data_root = './Data/OxfordPets'
+    num_classes = 3  # 0: background, 1: pet, 2: border
 
     # Training
     batch_size = 8
-    num_epochs = 200
+    num_epochs = 100
     learning_rate = 1e-3
     weight_decay = 1e-4
 
