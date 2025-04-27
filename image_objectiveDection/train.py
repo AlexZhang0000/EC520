@@ -103,7 +103,7 @@ def train(train_distortion=None):
             optimizer.zero_grad()
             preds = model(imgs)
 
-            loss = None  # 使用 None 初始化
+            loss = None
 
             batch_size = imgs.size(0)
 
@@ -131,6 +131,8 @@ def train(train_distortion=None):
                     pred = pred.view(3, feature_size, feature_size, -1)
 
                     pred_box = pred[anchor_idx, grid_y, grid_x, :4]
+                    pred_box = pred_box.clamp(-1e3, 1e3)  # 【新】clip预测算符，防止nan
+
                     pred_obj = pred[anchor_idx, grid_y, grid_x, 4].unsqueeze(0)
                     pred_cls = pred[anchor_idx, grid_y, grid_x, 5:]
 
@@ -195,6 +197,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     train(train_distortion=args.train_distortion)
+
 
 
 
