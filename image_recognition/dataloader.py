@@ -6,6 +6,20 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 
+# 新增：自定义加高斯噪声
+class AddGaussianNoise(torch.nn.Module):
+    def __init__(self, mean=0., std=1.):
+        super().__init__()
+        self.mean = mean
+        self.std = std
+
+    def forward(self, tensor):
+        noise = torch.randn_like(tensor) * self.std + self.mean
+        return tensor + noise
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(mean={self.mean}, std={self.std})"
+
 class CIFAR10Dataset(Dataset):
     def __init__(self, data_path, mode='train', distortion=None):
         self.data = []
@@ -39,7 +53,7 @@ class CIFAR10Dataset(Dataset):
                 transforms.RandomHorizontalFlip()
             ]
 
-        # 插入失真操作 (只支持GaussianBlur)
+        # 插入失真操作
         if self.distortion:
             distortions = self.distortion.split('/')
             for d in distortions:
@@ -49,10 +63,16 @@ class CIFAR10Dataset(Dataset):
                     kernel_size = int(kernel_size)
                     sigma = float(sigma)
                     transform_list.append(transforms.GaussianBlur(kernel_size=kernel_size, sigma=sigma))
+                elif 'gaussiannoise' in d:
+                    params = d.split(':')[1]
+                    mean, std = params.split(',')
+                    mean = float(mean)
+                    std = float(std)
+                    transform_list.append(AddGaussianNoise(mean=mean, std=std))
                 else:
                     raise ValueError(f"Unsupported distortion type: {d}")
 
-        # 最后做 ToTensor + Normalize
+        # 最后ToTensor + Normalize
         transform_list += [
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
