@@ -6,7 +6,6 @@ from config import Config
 from dataloader import get_loader
 from model import UNet
 from utils import compute_iou
-import argparse
 
 def train():
     torch.manual_seed(Config.seed)
@@ -19,7 +18,7 @@ def train():
     model = UNet(n_classes=Config.num_classes).to(Config.device)
     criterion = nn.CrossEntropyLoss(ignore_index=255)
     optimizer = optim.Adam(model.parameters(), lr=Config.learning_rate, weight_decay=Config.weight_decay)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.5)  # ✅100轮后学习率减半
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.5)
 
     best_miou = 0.0
 
@@ -68,10 +67,11 @@ def train():
             best_miou = val_miou
             torch.save(model.state_dict(), os.path.join(Config.model_save_path, 'best_model.pth'))
 
-        scheduler.step()  # ✅别忘了每轮更新scheduler
+        scheduler.step()
 
     print('Training finished.')
 
 if __name__ == '__main__':
     train()
+
 
