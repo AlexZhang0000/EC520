@@ -30,10 +30,10 @@ def train():
 
     # Data loaders
     train_loader = get_loader(Config.data_root, batch_size=Config.batch_size, mode='train', distortion=args.train_distortion)
-    val_loader = get_loader(Config.data_root, batch_size=Config.batch_size, mode='val', distortion=None)  # val是干净的！
+    val_loader = get_loader(Config.data_root, batch_size=Config.batch_size, mode='val', distortion=None)  # val集干净
 
     model = UNet(n_classes=Config.num_classes).to(Config.device)
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(ignore_index=255)  # ✅修正这里
     optimizer = optim.Adam(model.parameters(), lr=Config.learning_rate, weight_decay=Config.weight_decay)
 
     best_miou = 0.0
