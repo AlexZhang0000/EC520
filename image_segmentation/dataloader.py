@@ -1,40 +1,41 @@
 import os
-import zipfile
-import gdown
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
-from torchvision import transforms as T
+from torchvision.datasets import VOCSegmentation
+import torchvision.transforms as T
 from PIL import Image
 
-def download_and_extract_camvid(root):
-    google_drive_id = "1b2cg-8dMEd2S98RYJRx3MDCMXsKhSIEw"  # ✅CamVid压缩包ID
-    zip_path = os.path.join(root, "camvid.zip")
+# VOC官方定义的21个类别顺序
+VOC_CLASSES = [
+    'background', 'aeroplane', 'bicycle', 'bird', 'boat',
+    'bottle', 'bus', 'car', 'cat', 'chair',
+    'cow', 'diningtable', 'dog', 'horse', 'motorbike',
+    'person', 'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor'
+]
 
-    os.makedirs(root, exist_ok=True)
+# 我们选的4个类别的原始ID
+CLASS_NAME_TO_ID = {
+    'background': 0,
+    'sky': 21,    # 注意：天空不是官方VOC标签，我们特殊处理（全归到背景也可以）
+    'person': 15,
+    'car': 7,
+}
 
-    # 下载
-    print("Downloading CamVid dataset from Google Drive...")
-    gdown.download(id=google_drive_id, output=zip_path, quiet=False)
+# 如果找不到天空类别（因为VOC标准分割没有"sky"），就用背景代替
 
-    # 解压
-    print("Extracting CamVid dataset...")
-    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(root)
+# 只保留背景、人、车，把其他当成背景
+ID_MAPPING = {i: 0 for i in range(256)}
+ID_MAPPING.update({
+    0: 0,    # background
+    15: 2,   # person
+    7: 3,    # car
+    # (天空单独处理)
+})
 
-    # 删除zip
-    os.remove(zip_path)
-    print("CamVid download and extraction completed!")
-
-class CamVidDataset(torch.utils.data.Dataset):
-    def __init__(self, root, mode='train'):
-        self.root = root
-        if not os.path.exists(os.path.join(root, 'train')):  # 如果数据不存在
-            download_and_extract_camvid(root)
-
-        self.image_dir = os.path.join(root, mode)
-        self.label_dir = os.path.join(root, mode + '_labels')
-        self.image_names = sorted(os.listdir(self.image_dir))
+class VOC4ClassDataset(torch.utils.data.Dataset):
+    def __init__(self, root, image_set='train'):
+        self.dataset = VOCSegmentation(root=root, year='2012', image_set=image_set, download=True)
 
         self.input_transform = T.Compose([
             T.Resize((256, 256)),
@@ -45,26 +46,27 @@ class CamVidDataset(torch.utils.data.Dataset):
         ])
 
     def __len__(self):
-        return len(self.image_names)
+        return len(self.dataset)
 
     def __getitem__(self, idx):
-        img_name = self.image_names[idx]
-        img_path = os.path.join(self.image_dir, img_name)
-        label_path = os.path.join(self.label_dir, img_name)
-
-        img = Image.open(img_path).convert('RGB')
-        label = Image.open(label_path)
+        img, mask = self.dataset[idx]
 
         img = self.input_transform(img)
 
-        label = label.resize((256, 256), Image.NEAREST)
-        label = np.array(label)
-        label = torch.from_numpy(label).long()
+        mask = mask.resize((256, 256), Image.NEAREST)
+        mask = np.array(mask)
 
-        return img, label
+        # 重映射标签：只保留背景、人、车，其它都归0
+        mask_remapped = np.zeros_like(mask)
+        for k, v in ID_MAPPING.items():
+            mask_remapped[mask == k] = v
+
+        mask_remapped = torch.from_numpy(mask_remapped).long()
+
+        return img, mask_remapped
 
 def get_loader(root, batch_size=16, mode='train', shuffle=True, num_workers=2):
-    dataset = CamVidDataset(root=root, mode=mode)
+    dataset = VOC4ClassDataset(root=root, image_set=mode)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=(mode=='train'), num_workers=num_workers)
     return loader
 
