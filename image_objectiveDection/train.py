@@ -85,7 +85,7 @@ def train(train_distortion=None):
             optimizer.zero_grad()
             preds = model(imgs)
 
-            loss = 0.0
+            loss = torch.tensor(0.0, device=Config.device, requires_grad=True)
             batch_size = imgs.size(0)
 
             for b in range(batch_size):
