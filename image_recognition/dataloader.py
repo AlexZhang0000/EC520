@@ -5,8 +5,10 @@ from PIL import Image
 import torch
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
+import io
 
-# 新增：自定义加高斯噪声
+# --- 自定义失真方法 ---
+
 class AddGaussianNoise(torch.nn.Module):
     def __init__(self, mean=0., std=1.):
         super().__init__()
@@ -19,6 +21,38 @@ class AddGaussianNoise(torch.nn.Module):
 
     def __repr__(self):
         return f"{self.__class__.__name__}(mean={self.mean}, std={self.std})"
+
+class ApplyAliasing(torch.nn.Module):
+    def __init__(self, factor=4):
+        super().__init__()
+        self.factor = factor
+
+    def forward(self, img):
+        w, h = img.size
+        new_w, new_h = w // self.factor, h // self.factor
+        img = img.resize((new_w, new_h), resample=Image.NEAREST)  # 最差插值缩小
+        img = img.resize((w, h), resample=Image.NEAREST)          # 最差插值放大回32x32
+        return img
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(factor={self.factor})"
+
+class ApplyJPEGCompression(torch.nn.Module):
+    def __init__(self, quality=75):
+        super().__init__()
+        self.quality = quality
+
+    def forward(self, img):
+        buffer = io.BytesIO()
+        img.save(buffer, format='JPEG', quality=self.quality)
+        buffer.seek(0)
+        img = Image.open(buffer)
+        return img
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(quality={self.quality})"
+
+# --- 主Dataset定义 ---
 
 class CIFAR10Dataset(Dataset):
     def __init__(self, data_path, mode='train', distortion=None):
@@ -44,7 +78,7 @@ class CIFAR10Dataset(Dataset):
         self.data = np.vstack(self.data)
         self.labels = np.array(self.labels)
 
-        # 定义transform
+        # 定义 transform
         transform_list = []
 
         if self.mode == 'train':
@@ -53,7 +87,7 @@ class CIFAR10Dataset(Dataset):
                 transforms.RandomHorizontalFlip()
             ]
 
-        # 插入失真操作
+        # 插入失真
         if self.distortion:
             distortions = self.distortion.split('/')
             for d in distortions:
@@ -69,10 +103,16 @@ class CIFAR10Dataset(Dataset):
                     mean = float(mean)
                     std = float(std)
                     transform_list.append(AddGaussianNoise(mean=mean, std=std))
+                elif 'aliasing' in d:
+                    factor = int(d.split(':')[1])
+                    transform_list.append(ApplyAliasing(factor=factor))
+                elif 'jpegcompression' in d:
+                    quality = int(d.split(':')[1])
+                    transform_list.append(ApplyJPEGCompression(quality=quality))
                 else:
                     raise ValueError(f"Unsupported distortion type: {d}")
 
-        # 最后ToTensor + Normalize
+        # 最后 ToTensor + Normalize
         transform_list += [
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
@@ -101,6 +141,8 @@ class CIFAR10Dataset(Dataset):
         img = self.transform(img)
         return img, label
 
+# --- DataLoader封装 ---
+
 def get_loader(data_path, batch_size, mode='train', shuffle=True, num_workers=2, distortion=None):
     dataset = CIFAR10Dataset(data_path, mode, distortion)
     dataloader = DataLoader(
@@ -110,6 +152,7 @@ def get_loader(data_path, batch_size, mode='train', shuffle=True, num_workers=2,
         num_workers=num_workers
     )
     return dataloader
+
 
 
 
