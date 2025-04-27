@@ -1,36 +1,23 @@
 import os
 import zipfile
-import requests
+import gdown
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms as T
 from PIL import Image
-from tqdm import tqdm
 
 def download_and_extract_camvid(root):
-    url = "https://data.vision.ee.ethz.ch/ihnatova/camvid/camvid.zip"
+    google_drive_id = "1b2cg-8dMEd2S98RYJRx3MDCMXsKhSIEw"  # ✅CamVid压缩包ID
     zip_path = os.path.join(root, "camvid.zip")
 
-    # 创建root文件夹
     os.makedirs(root, exist_ok=True)
 
-    # 下载zip
-    print("Downloading CamVid dataset...")
-    with requests.get(url, stream=True) as r:
-        total_size = int(r.headers.get('content-length', 0))
-        with open(zip_path, 'wb') as f, tqdm(
-            desc="camvid.zip",
-            total=total_size,
-            unit='iB',
-            unit_scale=True,
-            unit_divisor=1024,
-        ) as bar:
-            for chunk in r.iter_content(chunk_size=1024):
-                f.write(chunk)
-                bar.update(len(chunk))
+    # 下载
+    print("Downloading CamVid dataset from Google Drive...")
+    gdown.download(id=google_drive_id, output=zip_path, quiet=False)
 
-    # 解压zip
+    # 解压
     print("Extracting CamVid dataset...")
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
         zip_ref.extractall(root)
