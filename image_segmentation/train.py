@@ -8,34 +8,17 @@ from model import UNet
 from utils import compute_iou
 import argparse
 
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--train_distortion', type=str, default=None,
-                        help="Distortion format for training data")
-    return parser.parse_args()
-
-def make_suffix(distortion):
-    if distortion is None:
-        return '_clean'
-    clean_distortion = distortion.replace('/', '_').replace(':', '_').replace(',', '_')
-    return f"_distorted_{clean_distortion}"
-
 def train():
-    args = parse_args()
-    save_suffix = make_suffix(args.train_distortion)
-
     torch.manual_seed(Config.seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(Config.seed)
 
-    # Data loaders
-    train_loader = get_loader(Config.data_root, batch_size=Config.batch_size, mode='train', distortion=args.train_distortion)
-    val_loader = get_loader(Config.data_root, batch_size=Config.batch_size, mode='val', distortion=None)
+    train_loader = get_loader(Config.data_root, batch_size=Config.batch_size, mode='train')
+    val_loader = get_loader(Config.data_root, batch_size=Config.batch_size, mode='val')
 
     model = UNet(n_classes=Config.num_classes).to(Config.device)
     criterion = nn.CrossEntropyLoss(ignore_index=255)
     optimizer = optim.Adam(model.parameters(), lr=Config.learning_rate, weight_decay=Config.weight_decay)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.5)  # ✅ 每50轮降一半
 
     best_miou = 0.0
 
@@ -58,7 +41,6 @@ def train():
 
         train_loss = running_loss / len(train_loader.dataset)
 
-        # Validation
         model.eval()
         preds_all = []
         masks_all = []
@@ -83,10 +65,7 @@ def train():
 
         if val_miou > best_miou:
             best_miou = val_miou
-            save_name = f"best_model{save_suffix}.pth"
-            torch.save(model.state_dict(), os.path.join(Config.model_save_path, save_name))
-
-        scheduler.step()  # ✅别忘了
+            torch.save(model.state_dict(), os.path.join(Config.model_save_path, 'best_model.pth'))
 
     print('Training finished.')
 
