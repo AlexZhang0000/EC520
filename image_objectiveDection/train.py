@@ -13,7 +13,7 @@ def map_target_to_feature(target, feature_size, img_size):
     Map ground truth (x1, y1, x2, y2) to feature map (grid_x, grid_y) index.
     防止grid越界。
     """
-    x1, y1, x2, y2 = target  # 输入是 (x1, y1, x2, y2)
+    x1, y1, x2, y2 = target
     cx = (x1 + x2) / 2
     cy = (y1 + y2) / 2
 
@@ -21,7 +21,6 @@ def map_target_to_feature(target, feature_size, img_size):
     grid_x = int(cx * scale)
     grid_y = int(cy * scale)
 
-    # 防止grid越界（比如x=img_size边界）
     grid_x = max(0, min(grid_x, feature_size - 1))
     grid_y = max(0, min(grid_y, feature_size - 1))
 
@@ -59,46 +58,49 @@ def train(train_distortion=None):
             preds = model(imgs)  # preds shape: (batch, 1200, 5+num_classes)
 
             loss = 0.0
-
             batch_size = imgs.size(0)
 
             for b in range(batch_size):
                 pred = preds[b]  # (1200, 5+num_classes)
-                target = targets[b]
-                label = labels[b]
+                target_list = targets[b]  # list of (x1,y1,x2,y2)
+                label_list = labels[b]    # list of label id
 
-                if label[0] == -1:
+                if len(label_list) == 0:
                     continue
 
-                feature_size = 20  # 你的输出feature map大小是20x20
-                img_size = Config.img_size  # 输入图像大小640
+                for obj_idx in range(len(label_list)):
+                    target = target_list[obj_idx]
+                    label = label_list[obj_idx]
 
-                grid_x, grid_y = map_target_to_feature(target, feature_size, img_size)
+                    feature_size = 20
+                    img_size = Config.img_size
 
-                anchor_idx = 0  # 简化版：只用第0个anchor
+                    grid_x, grid_y = map_target_to_feature(target, feature_size, img_size)
 
-                pred_idx = (anchor_idx * feature_size * feature_size) + (grid_y * feature_size) + grid_x
+                    anchor_idx = 0  # 用第0个anchor（简化）
 
-                pred_box = pred[pred_idx, :4]  # (cx, cy, w, h)
-                pred_obj = pred[pred_idx, 4]
-                pred_cls = pred[pred_idx, 5:]
+                    pred_idx = (anchor_idx * feature_size * feature_size) + (grid_y * feature_size) + grid_x
 
-                # ground truth
-                x1, y1, x2, y2 = target
-                cx = (x1 + x2) / 2
-                cy = (y1 + y2) / 2
-                w = (x2 - x1)
-                h = (y2 - y1)
-                true_box = torch.tensor([cx, cy, w, h], device=Config.device)
+                    pred_box = pred[pred_idx, :4]
+                    pred_obj = pred[pred_idx, 4]
+                    pred_cls = pred[pred_idx, 5:]
 
-                true_obj = torch.ones(1, device=Config.device)
-                true_cls = torch.nn.functional.one_hot(label, Config.num_classes).float().to(Config.device)
+                    # ground truth box (cx,cy,w,h)
+                    x1, y1, x2, y2 = target
+                    cx = (x1 + x2) / 2
+                    cy = (y1 + y2) / 2
+                    w = (x2 - x1)
+                    h = (y2 - y1)
+                    true_box = torch.tensor([cx, cy, w, h], device=Config.device)
 
-                loc_loss = mse_loss(pred_box, true_box)
-                obj_loss = bce_loss(pred_obj, true_obj)
-                cls_loss = bce_loss(pred_cls, true_cls)
+                    true_obj = torch.ones(1, device=Config.device)
+                    true_cls = torch.nn.functional.one_hot(label, Config.num_classes).float().to(Config.device)
 
-                loss += loc_loss + obj_loss + cls_loss
+                    loc_loss = mse_loss(pred_box, true_box)
+                    obj_loss = bce_loss(pred_obj, true_obj)
+                    cls_loss = bce_loss(pred_cls, true_cls)
+
+                    loss += loc_loss + obj_loss + cls_loss
 
             loss.backward()
             optimizer.step()
@@ -106,7 +108,7 @@ def train(train_distortion=None):
 
         avg_loss = total_loss / len(train_loader)
 
-        # 验证阶段
+        # 验证
         model.eval()
         preds_all = []
         targets_all = []
