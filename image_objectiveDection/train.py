@@ -6,7 +6,7 @@ import torch.nn as nn
 from config import Config
 from dataloader import get_loader
 from model import YOLOv5Backbone
-from utils import compute_map, set_seed, CIoULoss, decode_boxes, box_iou
+from utils import compute_map, set_seed, SimpleBoxLoss, decode_boxes, box_iou
 
 def map_target_to_feature_and_anchor(target, pred, feature_size, img_size):
     anchors_per_cell = 3
@@ -55,7 +55,7 @@ def train(train_distortion=None):
     model = YOLOv5Backbone(num_classes=Config.num_classes).to(Config.device)
 
     bce_loss = nn.BCEWithLogitsLoss()
-    ciou_loss = CIoULoss()
+    box_loss = SimpleBoxLoss()
 
     optimizer = optim.SGD(
         model.parameters(),
@@ -64,7 +64,6 @@ def train(train_distortion=None):
         weight_decay=Config.weight_decay
     )
 
-    # 🚀 加上学习率调度器：Warmup + CosineAnnealing
     def lr_lambda(current_epoch):
         warmup_epochs = 5
         if current_epoch < warmup_epochs:
@@ -86,6 +85,7 @@ def train(train_distortion=None):
             preds = model(imgs)
 
             loss = torch.tensor(0.0, device=Config.device, requires_grad=True)
+
             batch_size = imgs.size(0)
 
             for b in range(batch_size):
@@ -96,45 +96,41 @@ def train(train_distortion=None):
                 if len(label_list) == 0:
                     continue
 
-                for obj_idx in range(len(label_list)):
-                    target = target_list[obj_idx]
-                    label = label_list[obj_idx]
+                # 🔥 每张图只选一个目标
+                obj_idx = torch.randint(0, len(label_list), (1,)).item()
+                target = target_list[obj_idx]
+                label = label_list[obj_idx]
 
-                    if label < 0:
-                        continue
+                feature_size = 40
+                img_size = Config.img_size
 
-                    feature_size = 40
-                    img_size = Config.img_size
+                grid_x, grid_y, anchor_idx = map_target_to_feature_and_anchor(target, pred, feature_size, img_size)
 
-                    grid_x, grid_y, anchor_idx = map_target_to_feature_and_anchor(target, pred, feature_size, img_size)
+                pred = pred.view(3, feature_size, feature_size, -1)
 
-                    pred = pred.view(3, feature_size, feature_size, -1)
+                pred_box = pred[anchor_idx, grid_y, grid_x, :4]
+                pred_obj = pred[anchor_idx, grid_y, grid_x, 4].unsqueeze(0)
+                pred_cls = pred[anchor_idx, grid_y, grid_x, 5:]
 
-                    pred_box = pred[anchor_idx, grid_y, grid_x, :4]
-                    pred_obj = pred[anchor_idx, grid_y, grid_x, 4].unsqueeze(0)
-                    pred_cls = pred[anchor_idx, grid_y, grid_x, 5:]
+                x1, y1, x2, y2 = target
+                cx = (x1 + x2) / 2
+                cy = (y1 + y2) / 2
+                w = (x2 - x1)
+                h = (y2 - y1)
+                true_box = torch.tensor([cx, cy, w, h], device=Config.device)
 
-                    x1, y1, x2, y2 = target
-                    cx = (x1 + x2) / 2
-                    cy = (y1 + y2) / 2
-                    w = (x2 - x1)
-                    h = (y2 - y1)
-                    true_box = torch.tensor([cx, cy, w, h], device=Config.device)
+                true_obj = torch.ones(1, device=Config.device)
+                true_cls = torch.nn.functional.one_hot(label, Config.num_classes).float().to(Config.device)
 
-                    true_obj = torch.ones(1, device=Config.device)
-                    true_cls = torch.nn.functional.one_hot(label, Config.num_classes).float().to(Config.device)
+                loc_loss = box_loss(pred_box.unsqueeze(0), true_box.unsqueeze(0))
+                obj_loss = bce_loss(pred_obj, true_obj)
+                cls_loss = bce_loss(pred_cls, true_cls)
 
-                    loc_loss = ciou_loss(pred_box.unsqueeze(0), true_box.unsqueeze(0))
-                    obj_loss = bce_loss(pred_obj, true_obj)
-                    cls_loss = bce_loss(pred_cls, true_cls)
+                loc_loss = 5.0 * loc_loss
+                obj_loss = 1.0 * obj_loss
+                cls_loss = 1.0 * cls_loss
 
-                    # 🔥 Loss加权
-                    loc_loss = 5.0 * loc_loss
-                    obj_loss = 1.0 * obj_loss
-                    cls_loss = 1.0 * cls_loss
-
-                    loss = loss + loc_loss + obj_loss + cls_loss
-
+                loss = loss + loc_loss + obj_loss + cls_loss
 
             loss.backward()
             optimizer.step()
@@ -165,7 +161,6 @@ def train(train_distortion=None):
             save_filename = f"best_model{'_' + train_distortion if train_distortion else '_clean'}.pth"
             save_path = os.path.join(Config.model_save_path, save_filename)
             torch.save(model.state_dict(), save_path)
-
 
     print("✅ Training finished.")
 
