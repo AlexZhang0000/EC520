@@ -8,34 +8,32 @@ from dataloader import get_loader
 from model import YOLOv5Backbone
 from utils import compute_map, set_seed
 
+def map_target_to_feature(target, feature_size, img_size):
+    """
+    Map ground truth (cx, cy) to feature map (grid x, grid y) index.
+    """
+    cx, cy, w, h = target  # target 是 (cx, cy, w, h)
+    scale = feature_size / img_size
+    grid_x = int(cx * scale)
+    grid_y = int(cy * scale)
+    return grid_x, grid_y
+
 def train(train_distortion=None):
     set_seed(Config.seed)
 
     print(f"✅ Using device: {Config.device}")
 
-    # 加载数据
     train_loader = get_loader(batch_size=Config.batch_size, mode='train', distortion=train_distortion, pin_memory=True)
     val_loader = get_loader(batch_size=Config.batch_size, mode='val', distortion=None, pin_memory=True)
 
-    if len(train_loader) == 0 or len(val_loader) == 0:
-        raise ValueError("❌ Error: train_loader or val_loader is empty.")
-
-    # 初始化模型
     model = YOLOv5Backbone(num_classes=Config.num_classes).to(Config.device)
 
-    # 定义损失函数
     bce_loss = nn.BCEWithLogitsLoss()
-    ciou_loss = nn.MSELoss()  # 注意：用MSE代替真实CIoU loss，正式版可以升级
+    mse_loss = nn.MSELoss()
 
-    # 优化器
-    optimizer = optim.SGD(
-        model.parameters(),
-        lr=Config.learning_rate,
-        momentum=Config.momentum,
-        weight_decay=Config.weight_decay
-    )
+    optimizer = optim.SGD(model.parameters(), lr=Config.learning_rate, momentum=Config.momentum, weight_decay=Config.weight_decay)
 
-    best_map = 0.0  # 保存最佳mAP
+    best_map = 0.0
 
     for epoch in range(1, Config.epochs + 1):
         model.train()
@@ -43,33 +41,47 @@ def train(train_distortion=None):
 
         for imgs, targets, labels in train_loader:
             imgs = imgs.to(Config.device)
-
             optimizer.zero_grad()
-            preds = model(imgs)
+            preds = model(imgs)  # preds shape: (batch, 1200, 5+num_classes)
 
             loss = 0.0
-            for i in range(len(imgs)):
-                pred = preds[i]
-                target = targets[i]
-                label = labels[i]
+
+            batch_size = imgs.size(0)
+
+            for b in range(batch_size):
+                pred = preds[b]  # (1200, 5+num_classes)
+                target = targets[b]
+                label = labels[b]
 
                 if label[0] == -1:
-                    continue  # 如果没有合法目标，跳过
+                    continue
 
-                # 定位损失
-                box_pred = pred[..., :4]
-                box_true = target.to(Config.device)
-                loc_loss = ciou_loss(box_pred, box_true)
+                feature_size = 20  # 你的输出feature map大小是20x20
+                img_size = Config.img_size  # 输入图像大小640
 
-                # 置信度损失
-                obj_loss = bce_loss(pred[..., 4], torch.ones_like(pred[..., 4]))
+                grid_x, grid_y = map_target_to_feature(target, feature_size, img_size)
 
-                # 不做分类loss
-                loss += loc_loss + obj_loss
+                anchor_idx = 0  # 简化版：只用第0个anchor（每个grid有3个anchor）
+
+                pred_idx = (anchor_idx * feature_size * feature_size) + (grid_y * feature_size) + grid_x
+
+                pred_box = pred[pred_idx, :4]  # (cx, cy, w, h)
+                pred_obj = pred[pred_idx, 4]
+                pred_cls = pred[pred_idx, 5:]
+
+                # ground truth
+                true_box = target.to(Config.device)
+                true_obj = torch.ones(1, device=Config.device)
+                true_cls = torch.nn.functional.one_hot(label, Config.num_classes).float().to(Config.device)
+
+                loc_loss = mse_loss(pred_box, true_box)
+                obj_loss = bce_loss(pred_obj, true_obj)
+                cls_loss = bce_loss(pred_cls, true_cls)
+
+                loss += loc_loss + obj_loss + cls_loss
 
             loss.backward()
             optimizer.step()
-
             total_loss += loss.item()
 
         avg_loss = total_loss / len(train_loader)
@@ -90,7 +102,6 @@ def train(train_distortion=None):
 
         print(f"🧹 Epoch [{epoch}/{Config.epochs}] | Loss: {avg_loss:.4f} | Val mAP: {mAP:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
 
-        # 保存最佳模型
         if mAP > best_map:
             best_map = mAP
             save_filename = f"best_model{'_' + train_distortion if train_distortion else '_clean'}.pth"
@@ -106,5 +117,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     train(train_distortion=args.train_distortion)
+
 
 
