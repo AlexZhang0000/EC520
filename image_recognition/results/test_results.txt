@@ -1,2 +1,0 @@
-Test Accuracy: 91.44%
-F1 Score: 0.9151
