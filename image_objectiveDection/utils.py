@@ -38,7 +38,7 @@ def compute_map(preds_all, targets_all, iou_thresh=0.5):
         obj_conf = preds[..., 4]
         class_conf = preds[..., 5:]
 
-        pred_mask = obj_conf > 0.3
+        pred_mask = obj_conf > 0.2
         pred_boxes = preds[pred_mask][..., :4]
         pred_boxes = decode_boxes(pred_boxes)
 
