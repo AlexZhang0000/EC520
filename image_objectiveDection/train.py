@@ -61,9 +61,9 @@ def train(train_distortion=None):
             batch_size = imgs.size(0)
 
             for b in range(batch_size):
-                pred = preds[b]  # (1200, 5+num_classes)
-                target_list = targets[b]  # list of (x1,y1,x2,y2)
-                label_list = labels[b]    # list of label id
+                pred = preds[b]
+                target_list = targets[b]
+                label_list = labels[b]
 
                 if len(label_list) == 0:
                     continue
@@ -72,12 +72,15 @@ def train(train_distortion=None):
                     target = target_list[obj_idx]
                     label = label_list[obj_idx]
 
+                    if label < 0:
+                        continue  # 跳过非法label
+
                     feature_size = 20
                     img_size = Config.img_size
 
                     grid_x, grid_y = map_target_to_feature(target, feature_size, img_size)
 
-                    anchor_idx = 0  # 用第0个anchor（简化）
+                    anchor_idx = 0
 
                     pred_idx = (anchor_idx * feature_size * feature_size) + (grid_y * feature_size) + grid_x
 
@@ -127,7 +130,7 @@ def train(train_distortion=None):
         if mAP > best_map:
             best_map = mAP
             save_filename = f"best_model{'_' + train_distortion if train_distortion else '_clean'}.pth"
-            save_path = os.path.join(Config.base_save_dir, save_filename)
+            save_path = os.path.join(Config.model_save_path, save_filename)
             torch.save(model.state_dict(), save_path)
             print(f"💾 Saved best model to {save_path}")
 
@@ -139,6 +142,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     train(train_distortion=args.train_distortion)
+
 
 
 
