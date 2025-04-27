@@ -12,8 +12,8 @@ class Config:
     num_classes = 21  # VOC有20类 + 背景
     
     # Training
-    batch_size = 16
-    num_epochs = 100
+    batch_size = 8  # ✅ batch小一点
+    num_epochs = 200  # ✅ 增加轮数
     learning_rate = 1e-3
     weight_decay = 1e-4
 
