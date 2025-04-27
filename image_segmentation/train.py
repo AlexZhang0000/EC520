@@ -13,15 +13,13 @@ def train():
     if torch.cuda.is_available():
         torch.cuda.manual_seed(Config.seed)
 
-    # 加载数据
     train_loader = get_loader(Config.data_root, batch_size=Config.batch_size, mode='train')
-    val_loader = get_loader(Config.data_root, batch_size=Config.batch_size, mode='val')
+    val_loader = get_loader(Config.data_root, batch_size=Config.batch_size, mode='test')
 
-    # 初始化模型
     model = UNet(n_classes=Config.num_classes).to(Config.device)
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(ignore_index=255)
     optimizer = optim.Adam(model.parameters(), lr=Config.learning_rate, weight_decay=Config.weight_decay)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.5)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.5)
 
     best_miou = 0.0
 
@@ -79,6 +77,7 @@ def train():
 
 if __name__ == '__main__':
     train()
+
 
 
 
