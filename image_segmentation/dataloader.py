@@ -52,9 +52,9 @@ class VOCDataset(torch.utils.data.Dataset):
 
         # 图像变换
         self.input_transform_list = [
-            T.Resize((512, 512)),  # ✅ 修改为512x512
-            T.RandomHorizontalFlip(p=0.5),  # ✅ 加轻量flip
-            T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),  # ✅ 加颜色抖动
+            T.Resize((512, 512)),
+            T.RandomHorizontalFlip(p=0.5),
+            T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
         ]
 
         if distortion:
@@ -81,7 +81,11 @@ class VOCDataset(torch.utils.data.Dataset):
                 else:
                     raise ValueError(f"Unsupported distortion type: {d}")
 
-        self.input_transform_list.append(T.ToTensor())
+        self.input_transform_list += [
+            T.ToTensor(),  # ✅ 先转成Tensor
+            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # ✅ 再标准化
+        ]
+
         self.input_transform = T.Compose(self.input_transform_list)
 
     def __len__(self):
@@ -106,4 +110,5 @@ def get_loader(root, batch_size=8, mode='train', shuffle=True, num_workers=2, di
     dataset = VOCDataset(root=root, image_set=mode, distortion=distortion, download=True)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=(mode=='train'), num_workers=num_workers)
     return loader
+
 
