@@ -19,7 +19,7 @@ def train():
 
     # 初始化模型
     model = UNet(n_classes=Config.num_classes).to(Config.device)
-    criterion = nn.CrossEntropyLoss(ignore_index=255)  # ✅ 关键修改
+    criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=Config.learning_rate, weight_decay=Config.weight_decay)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.5)
 
@@ -29,7 +29,6 @@ def train():
         model.train()
         running_loss = 0.0
 
-        # 🔥加上tqdm进度条
         loop = tqdm(train_loader, desc=f'Epoch [{epoch}/{Config.num_epochs}]', leave=False)
 
         for images, masks in loop:
@@ -44,13 +43,10 @@ def train():
             optimizer.step()
 
             running_loss += loss.item() * images.size(0)
-
-            # 每个batch动态更新tqdm描述
             loop.set_postfix(loss=loss.item())
 
         train_loss = running_loss / len(train_loader.dataset)
 
-        # 验证
         model.eval()
         preds_all = []
         masks_all = []
@@ -73,7 +69,6 @@ def train():
 
         print(f"Epoch [{epoch}/{Config.num_epochs}] | Train Loss: {train_loss:.4f} | Val mIoU: {val_miou:.4f}")
 
-        # 保存最好的模型
         if val_miou > best_miou:
             best_miou = val_miou
             torch.save(model.state_dict(), os.path.join(Config.model_save_path, 'best_model.pth'))
@@ -84,6 +79,7 @@ def train():
 
 if __name__ == '__main__':
     train()
+
 
 
 
