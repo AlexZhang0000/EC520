@@ -1,6 +1,7 @@
 import torch
 import random
 import numpy as np
+import torch.nn as nn
 
 def box_iou(box1, box2):
     """
