@@ -1,6 +1,7 @@
 import os
 import pickle
 import numpy as np
+from PIL import Image  # ⭐ 新加：把numpy array转成PIL Image
 import torch
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
@@ -27,11 +28,11 @@ class CIFAR10Dataset(Dataset):
         else:
             raise ValueError(f"Unsupported mode {mode}")
 
-        # 所有数据加载完成后，堆叠成一个大的array
+        # 合并所有batch
         self.data = np.vstack(self.data)
         self.labels = np.array(self.labels)
 
-        # 定义不同模式下的transform
+        # 定义transform
         if self.mode == 'train':
             self.transform = transforms.Compose([
                 transforms.RandomCrop(32, padding=4),
@@ -62,6 +63,7 @@ class CIFAR10Dataset(Dataset):
 
     def __getitem__(self, idx):
         img, label = self.data[idx], self.labels[idx]
+        img = Image.fromarray(img)  # ⭐ 把numpy array转成PIL Image
         img = self.transform(img)
         return img, label
 
@@ -75,5 +77,6 @@ def get_loader(data_path, batch_size, mode='train', shuffle=True, num_workers=2)
         num_workers=num_workers
     )
     return dataloader
+
 
 
