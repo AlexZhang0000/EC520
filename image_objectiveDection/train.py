@@ -103,7 +103,7 @@ def train(train_distortion=None):
             optimizer.zero_grad()
             preds = model(imgs)
 
-            loss = torch.tensor(0.0, device=Config.device)  # 使用tensor类型，支持backward()
+            loss = None  # 使用 None 初始化
 
             batch_size = imgs.size(0)
 
@@ -150,12 +150,16 @@ def train(train_distortion=None):
                     obj_loss = 1.0 * bce_loss(pred_obj, true_obj)
                     cls_loss = 1.0 * bce_loss(pred_cls, true_cls)
 
-                    loss = loss + (loc_loss + obj_loss + cls_loss)
+                    if loss is None:
+                        loss = loc_loss + obj_loss + cls_loss
+                    else:
+                        loss = loss + (loc_loss + obj_loss + cls_loss)
 
-            loss = loss / batch_size
-            loss.backward()
-            optimizer.step()
-            total_loss += loss.item()
+            if loss is not None:
+                loss = loss / batch_size
+                loss.backward()
+                optimizer.step()
+                total_loss += loss.item()
 
         scheduler.step()
 
@@ -191,7 +195,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     train(train_distortion=args.train_distortion)
-
 
 
 
