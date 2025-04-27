@@ -8,12 +8,12 @@ class Config:
     seed = 42
 
     # Dataset
-    data_root = './Data'  # 自动下载 VOC 2012 数据到这个文件夹
-    num_classes = 21  # VOC有20类 + 背景
-    
+    data_root = './Data'
+    num_classes = 21  # VOC有20类+背景
+
     # Training
-    batch_size = 8  # ✅ batch小一点
-    num_epochs = 200  # ✅ 增加轮数
+    batch_size = 16  # ✅ 保持较大batch size
+    num_epochs = 200  # ✅ 改成200轮
     learning_rate = 1e-3
     weight_decay = 1e-4
 
@@ -21,6 +21,7 @@ class Config:
     model_save_path = './saved_models'
     results_save_path = './results'
 
-    # Create directories if not exist
+    # Ensure directories
     os.makedirs(model_save_path, exist_ok=True)
     os.makedirs(results_save_path, exist_ok=True)
+
