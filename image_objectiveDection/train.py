@@ -14,17 +14,14 @@ def map_target_to_feature_and_anchor(target, pred, feature_size, img_size):
 
     x1, y1, x2, y2 = target
 
-    # 1.防止无效框
     if x2 <= x1 or y2 <= y1:
         raise ValueError(f"Invalid target box: {target}")
 
-    # 2.标准化
     x1 = max(0.0, min(1.0, x1))
     y1 = max(0.0, min(1.0, y1))
     x2 = max(0.0, min(1.0, x2))
     y2 = max(0.0, min(1.0, y2))
 
-    # 3. 直接用图片比例算 grid
     cx = (x1 + x2) / 2
     cy = (y1 + y2) / 2
 
@@ -41,7 +38,6 @@ def map_target_to_feature_and_anchor(target, pred, feature_size, img_size):
 
     gt_box = torch.tensor([gt_cx, gt_cy, gt_w, gt_h], device=pred.device).unsqueeze(0)
 
-    # 4. 选择最佳anchor
     max_iou = 0
     best_anchor = 0
 
@@ -80,7 +76,7 @@ def train(train_distortion=None):
 
     optimizer = optim.SGD(
         model.parameters(),
-        lr=Config.learning_rate,
+        lr=0.005,  # ⬆️ 初期Learning Rate加大
         momentum=Config.momentum,
         weight_decay=Config.weight_decay
     )
@@ -114,51 +110,45 @@ def train(train_distortion=None):
                 target_list = targets[b]
                 label_list = labels[b]
 
-                # 🔥 跳过垃圾图片
                 if is_bad_targets(target_list):
                     continue
 
-                obj_idx = torch.randint(0, len(label_list), (1,)).item()
-                target = target_list[obj_idx]
-                label = label_list[obj_idx]
+                num_objs = min(3, len(label_list))
+                for obj_idx in torch.randperm(len(label_list))[:num_objs]:
+                    target = target_list[obj_idx]
+                    label = label_list[obj_idx]
 
-                feature_size = 40
-                img_size = Config.img_size
+                    feature_size = 40
+                    img_size = Config.img_size
 
-                try:
-                    grid_x, grid_y, anchor_idx = map_target_to_feature_and_anchor(target, pred, feature_size, img_size)
-                except Exception as e:
-                    print(f"Skipping bad target: {target}, reason: {e}")
-                    continue
+                    try:
+                        grid_x, grid_y, anchor_idx = map_target_to_feature_and_anchor(target, pred, feature_size, img_size)
+                    except Exception as e:
+                        continue
 
-                pred = pred.view(3, feature_size, feature_size, -1)
+                    pred = pred.view(3, feature_size, feature_size, -1)
 
-                pred_box = pred[anchor_idx, grid_y, grid_x, :4]
-                pred_obj = pred[anchor_idx, grid_y, grid_x, 4].unsqueeze(0)
-                pred_cls = pred[anchor_idx, grid_y, grid_x, 5:]
+                    pred_box = pred[anchor_idx, grid_y, grid_x, :4]
+                    pred_obj = pred[anchor_idx, grid_y, grid_x, 4].unsqueeze(0)
+                    pred_cls = pred[anchor_idx, grid_y, grid_x, 5:]
 
-                x1, y1, x2, y2 = target
-                cx = (x1 + x2) / 2 * img_size
-                cy = (y1 + y2) / 2 * img_size
-                w = (x2 - x1) * img_size
-                h = (y2 - y1) * img_size
-                true_box = torch.tensor([cx, cy, w, h], device=Config.device)
+                    x1, y1, x2, y2 = target
+                    cx = (x1 + x2) / 2 * img_size
+                    cy = (y1 + y2) / 2 * img_size
+                    w = (x2 - x1) * img_size
+                    h = (y2 - y1) * img_size
+                    true_box = torch.tensor([cx, cy, w, h], device=Config.device)
 
-                true_obj = torch.ones(1, device=Config.device)
+                    true_obj = torch.ones(1, device=Config.device)
 
-                label = torch.tensor(int(label), device=Config.device)
-                true_cls = torch.nn.functional.one_hot(label, Config.num_classes).float()
+                    label = torch.tensor(int(label), device=Config.device)
+                    true_cls = torch.nn.functional.one_hot(label, Config.num_classes).float()
 
-                loc_loss = box_loss(pred_box.unsqueeze(0), true_box.unsqueeze(0))
-                obj_loss = bce_loss(pred_obj, true_obj)
-                cls_loss = bce_loss(pred_cls, true_cls)
+                    loc_loss = 2.0 * box_loss(pred_box.unsqueeze(0), true_box.unsqueeze(0))
+                    obj_loss = 1.0 * bce_loss(pred_obj, true_obj)
+                    cls_loss = 1.0 * bce_loss(pred_cls, true_cls)
 
-                # ✨ 新的合理loss权重
-                loc_loss = 2.0 * loc_loss
-                obj_loss = 1.0 * obj_loss
-                cls_loss = 1.0 * cls_loss
-
-                loss = loss + loc_loss + obj_loss + cls_loss
+                    loss = loss + loc_loss + obj_loss + cls_loss
 
             loss.backward()
             optimizer.step()
@@ -184,9 +174,6 @@ def train(train_distortion=None):
 
         print(f"🧹 Epoch [{epoch}/{Config.epochs}] | Loss: {avg_loss:.4f} | Val mAP: {mAP:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
 
-        if epoch <= 5:  # 🔥 前5轮打印额外信息
-            print(f"    [DEBUG] Sample pred: obj {pred_obj.sigmoid().item():.4f}, first cls {pred_cls.softmax(0)[0].item():.4f}")
-
         if mAP > best_map:
             best_map = mAP
             save_filename = f"best_model{'_' + train_distortion if train_distortion else '_clean'}.pth"
@@ -201,6 +188,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     train(train_distortion=args.train_distortion)
+
 
 
 
