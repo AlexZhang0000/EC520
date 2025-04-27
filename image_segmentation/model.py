@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 
-# --- U-Net基本构建模块 ---
 class DoubleConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
@@ -17,7 +16,6 @@ class DoubleConv(nn.Module):
     def forward(self, x):
         return self.double_conv(x)
 
-# --- Down采样模块 ---
 class Down(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
@@ -29,7 +27,6 @@ class Down(nn.Module):
     def forward(self, x):
         return self.down(x)
 
-# --- Up采样模块 ---
 class Up(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
@@ -38,17 +35,12 @@ class Up(nn.Module):
 
     def forward(self, x1, x2):
         x1 = self.up(x1)
-
-        # 对齐尺寸（防止下采样时出现尺寸不匹配）
         diffY = x2.size()[2] - x1.size()[2]
         diffX = x2.size()[3] - x1.size()[3]
-        x1 = nn.functional.pad(x1, [diffX // 2, diffX - diffX // 2,
-                                    diffY // 2, diffY - diffY // 2])
-
+        x1 = nn.functional.pad(x1, [diffX // 2, diffX - diffX // 2, diffY // 2, diffY - diffY // 2])
         x = torch.cat([x2, x1], dim=1)
         return self.conv(x)
 
-# --- U-Net整体结构 ---
 class UNet(nn.Module):
     def __init__(self, n_classes):
         super().__init__()
@@ -75,3 +67,4 @@ class UNet(nn.Module):
         x = self.up4(x, x1)
         x = self.outc(x)
         return x
+
