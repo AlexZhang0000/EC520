@@ -2,13 +2,13 @@ import torch
 import os
 
 class Config:
-    project_name = 'image_segmentation_voc4classes'
+    project_name = 'image_segmentation_oxfordpets'
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     seed = 42
 
     # Dataset
-    data_root = './Data/VOCdevkit'
-    num_classes = 4  # ✅ 背景 + 天空 + 人 + 汽车
+    data_root = './Data/OxfordPets'
+    num_classes = 3  # ✅ 背景(0)、宠物(1)、边界(2)
 
     # Training
     batch_size = 16
@@ -22,4 +22,5 @@ class Config:
 
     os.makedirs(model_save_path, exist_ok=True)
     os.makedirs(results_save_path, exist_ok=True)
+
 
