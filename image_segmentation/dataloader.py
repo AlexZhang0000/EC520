@@ -11,10 +11,11 @@ class VOCDataset(torch.utils.data.Dataset):
         self.dataset = VOCSegmentation(root=root, year='2012', image_set=image_set, download=download)
 
         self.input_transform = T.Compose([
-            T.Resize((256, 256)),          # ✅ 统一resize到256x256
-            T.RandomHorizontalFlip(p=0.5), # ✅ 加简单flip
-            T.ToTensor(),                  # ✅ 转成tensor [0,1]
-            # ⚡注意这里没加Normalize，跟你之前那版一样
+            T.Resize((256, 256)),
+            T.RandomHorizontalFlip(p=0.5),
+            T.ToTensor(),
+            T.Normalize(mean=[0.485, 0.456, 0.406],  # ✅加标准归一化
+                        std=[0.229, 0.224, 0.225])
         ])
 
     def __len__(self):
