@@ -26,9 +26,7 @@ def box_iou(box1, box2):
 
 def compute_map(preds_all, targets_all, iou_thresh=0.5):
     """
-    Compute simplified mean AP, precision, recall.
-    preds_all: list of tensors, each is (N, 5+num_classes)
-    targets_all: list of ground-truth boxes (tensor or list of tensors)
+    正确计算 mean AP, precision, recall
     """
     tp = 0
     fp = 0
@@ -42,16 +40,6 @@ def compute_map(preds_all, targets_all, iou_thresh=0.5):
 
         pred_mask = obj_conf > 0.5
 
-        if pred_mask.sum() == 0:
-            if isinstance(targets, torch.Tensor):
-                if targets.ndim == 1 and targets.size(0) == 4:
-                    fn += 1
-                else:
-                    fn += len(targets)
-            else:
-                fn += len(targets)
-            continue
-
         pred_boxes = preds[pred_mask][..., :4]
         pred_boxes = decode_boxes(pred_boxes)
 
@@ -63,19 +51,39 @@ def compute_map(preds_all, targets_all, iou_thresh=0.5):
         else:
             true_boxes = torch.stack(targets).to(pred_boxes.device)
 
-        ious = box_iou(pred_boxes, true_boxes)
+        num_gts = true_boxes.shape[0]
+        num_preds = pred_boxes.shape[0]
 
-        max_iou, _ = ious.max(dim=1)
+        if num_preds == 0:
+            fn += num_gts
+            continue
 
-        tp += (max_iou > iou_thresh).sum().item()
-        fp += (max_iou <= iou_thresh).sum().item()
-        fn += (len(true_boxes) - (max_iou > iou_thresh).sum().item())
+        if num_gts == 0:
+            fp += num_preds
+            continue
+
+        ious = box_iou(pred_boxes, true_boxes)  # (num_preds, num_gts)
+
+        matched_gt = torch.full((num_gts,), False, dtype=torch.bool, device=pred_boxes.device)
+
+        for i in range(num_preds):
+            iou_per_pred = ious[i]
+            max_iou, max_gt_idx = iou_per_pred.max(dim=0)
+
+            if max_iou > iou_thresh and not matched_gt[max_gt_idx]:
+                tp += 1
+                matched_gt[max_gt_idx] = True
+            else:
+                fp += 1
+
+        fn += (~matched_gt).sum().item()
 
     precision = tp / (tp + fp + 1e-6)
     recall = tp / (tp + fn + 1e-6)
     mAP = precision * recall
 
     return mAP, precision, recall
+
 
 def decode_boxes(boxes):
     """
