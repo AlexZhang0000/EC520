@@ -1,50 +1,64 @@
 import os
 import pickle
 import numpy as np
-from PIL import Image  # ⭐ 新加：把numpy array转成PIL Image
+from PIL import Image
 import torch
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 
 class CIFAR10Dataset(Dataset):
-    def __init__(self, data_path, mode='train'):
+    def __init__(self, data_path, mode='train', distortion=None):
         self.data = []
         self.labels = []
         self.mode = mode
+        self.distortion = distortion
 
+        # 加载数据
         if mode == 'train':
-            # 读取 data_batch_1 ~ data_batch_4
             for i in range(1, 5):
                 batch_file = os.path.join(data_path, f'data_batch_{i}')
                 self._load_batch(batch_file)
         elif mode == 'val':
-            # 读取 validation_batch
             batch_file = os.path.join(data_path, 'validation_batch')
             self._load_batch(batch_file)
         elif mode == 'test':
-            # 读取 test_batch
             batch_file = os.path.join(data_path, 'test_batch')
             self._load_batch(batch_file)
         else:
             raise ValueError(f"Unsupported mode {mode}")
 
-        # 合并所有batch
         self.data = np.vstack(self.data)
         self.labels = np.array(self.labels)
 
         # 定义transform
+        transform_list = []
+
         if self.mode == 'train':
-            self.transform = transforms.Compose([
+            transform_list += [
                 transforms.RandomCrop(32, padding=4),
-                transforms.RandomHorizontalFlip(),
-                transforms.ToTensor(),
-                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-            ])
-        else:
-            self.transform = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-            ])
+                transforms.RandomHorizontalFlip()
+            ]
+
+        # 插入失真操作 (只支持GaussianBlur)
+        if self.distortion:
+            distortions = self.distortion.split('/')
+            for d in distortions:
+                if 'gaussianblur' in d:
+                    params = d.split(':')[1]
+                    kernel_size, sigma = params.split(',')
+                    kernel_size = int(kernel_size)
+                    sigma = float(sigma)
+                    transform_list.append(transforms.GaussianBlur(kernel_size=kernel_size, sigma=sigma))
+                else:
+                    raise ValueError(f"Unsupported distortion type: {d}")
+
+        # 最后做 ToTensor + Normalize
+        transform_list += [
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ]
+
+        self.transform = transforms.Compose(transform_list)
 
     def _load_batch(self, batch_file):
         with open(batch_file, 'rb') as f:
@@ -52,8 +66,8 @@ class CIFAR10Dataset(Dataset):
             data = batch[b'data']
             labels = batch[b'labels']
 
-            data = data.reshape(-1, 3, 32, 32)  # (N, C, H, W)
-            data = np.transpose(data, (0, 2, 3, 1))  # (N, H, W, C)
+            data = data.reshape(-1, 3, 32, 32)
+            data = np.transpose(data, (0, 2, 3, 1))
 
             self.data.append(data)
             self.labels.extend(labels)
@@ -63,13 +77,12 @@ class CIFAR10Dataset(Dataset):
 
     def __getitem__(self, idx):
         img, label = self.data[idx], self.labels[idx]
-        img = Image.fromarray(img)  # ⭐ 把numpy array转成PIL Image
+        img = Image.fromarray(img)
         img = self.transform(img)
         return img, label
 
-
-def get_loader(data_path, batch_size, mode='train', shuffle=True, num_workers=2):
-    dataset = CIFAR10Dataset(data_path, mode)
+def get_loader(data_path, batch_size, mode='train', shuffle=True, num_workers=2, distortion=None):
+    dataset = CIFAR10Dataset(data_path, mode, distortion)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -77,6 +90,7 @@ def get_loader(data_path, batch_size, mode='train', shuffle=True, num_workers=2)
         num_workers=num_workers
     )
     return dataloader
+
 
 
 
