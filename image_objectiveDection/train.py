@@ -164,7 +164,7 @@ def train(train_distortion=None):
             save_filename = f"best_model{'_' + train_distortion if train_distortion else '_clean'}.pth"
             save_path = os.path.join(Config.model_save_path, save_filename)
             torch.save(model.state_dict(), save_path)
-            print(f"💾 Saved best model to {save_path}")
+
 
     print("✅ Training finished.")
 
