@@ -9,7 +9,6 @@ from model import YOLOv5Backbone
 from utils import compute_map, set_seed
 
 def train(train_distortion=None):
-    # 设置随机种子，保证复现性
     set_seed(Config.seed)
 
     print(f"✅ Using device: {Config.device}")
@@ -26,9 +25,9 @@ def train(train_distortion=None):
 
     # 定义损失函数
     bce_loss = nn.BCEWithLogitsLoss()
-    ciou_loss = nn.MSELoss()  # 注意：用MSE临时代替真实的CIoU loss，正式版可以替换
+    ciou_loss = nn.MSELoss()  # 注意：用MSE代替真实CIoU loss，正式版可以升级
 
-    # 定义优化器
+    # 优化器
     optimizer = optim.SGD(
         model.parameters(),
         lr=Config.learning_rate,
@@ -57,16 +56,16 @@ def train(train_distortion=None):
                 if label[0] == -1:
                     continue  # 如果没有合法目标，跳过
 
-                # 计算分类损失
-                cls_loss = bce_loss(pred[..., 5:], torch.nn.functional.one_hot(label, Config.num_classes).float().to(Config.device))
-                # 计算定位损失
+                # 定位损失
                 box_pred = pred[..., :4]
                 box_true = target.to(Config.device)
                 loc_loss = ciou_loss(box_pred, box_true)
-                # 计算置信度损失
+
+                # 置信度损失
                 obj_loss = bce_loss(pred[..., 4], torch.ones_like(pred[..., 4]))
 
-                loss += cls_loss + loc_loss + obj_loss
+                # 不做分类loss
+                loss += loc_loss + obj_loss
 
             loss.backward()
             optimizer.step()
