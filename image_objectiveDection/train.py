@@ -96,7 +96,7 @@ def train(train_distortion=None):
                 if len(label_list) == 0:
                     continue
 
-                # 🔥 每张图只选一个目标
+                # 🔥 每张图只随机取一个目标
                 obj_idx = torch.randint(0, len(label_list), (1,)).item()
                 target = target_list[obj_idx]
                 label = label_list[obj_idx]
@@ -120,7 +120,7 @@ def train(train_distortion=None):
                 true_box = torch.tensor([cx, cy, w, h], device=Config.device)
 
                 true_obj = torch.ones(1, device=Config.device)
-                true_cls = torch.nn.functional.one_hot(label, Config.num_classes).float().to(Config.device)
+                true_cls = torch.nn.functional.one_hot(int(label), Config.num_classes).float().to(Config.device)  # ✅ 修好这里，转int
 
                 loc_loss = box_loss(pred_box.unsqueeze(0), true_box.unsqueeze(0))
                 obj_loss = bce_loss(pred_obj, true_obj)
@@ -170,6 +170,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     train(train_distortion=args.train_distortion)
+
 
 
 
