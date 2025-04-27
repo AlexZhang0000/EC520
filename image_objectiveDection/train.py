@@ -78,7 +78,7 @@ def train(train_distortion=None):
 
     optimizer = optim.SGD(
         model.parameters(),
-        lr=0.005,  # ⬆️ 初期Learning Rate加大
+        lr=0.005,
         momentum=Config.momentum,
         weight_decay=Config.weight_decay
     )
@@ -103,7 +103,7 @@ def train(train_distortion=None):
             optimizer.zero_grad()
             preds = model(imgs)
 
-            loss = 0.0  # 使用Python float
+            loss = torch.tensor(0.0, device=Config.device)  # 使用tensor类型，支持backward()
 
             batch_size = imgs.size(0)
 
@@ -152,7 +152,7 @@ def train(train_distortion=None):
 
                     loss = loss + (loc_loss + obj_loss + cls_loss)
 
-            loss = loss / batch_size  # 加一个平均，防止数值爆炸
+            loss = loss / batch_size
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
