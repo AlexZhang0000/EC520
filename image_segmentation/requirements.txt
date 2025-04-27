@@ -1,5 +1,5 @@
 torch>=2.0
-torchvision>=0.15,<0.17
+torchvision>=0.15
 numpy==1.26.4
 matplotlib
 scikit-learn
