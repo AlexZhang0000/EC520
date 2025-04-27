@@ -32,7 +32,9 @@ class Config:
     # YOLOv5预训练配置
     pretrained_yolov5 = True
     yolov5_variant = 'yolov5s'
-
+    
+    model_save_path = './saved_models'
+    
     # VOC2007固定下载路径
     voc_root = os.path.join('.', 'data', 'VOC2007')
 
@@ -41,6 +43,7 @@ class Config:
     def init():
         os.makedirs(Config.base_save_dir, exist_ok=True)
         os.makedirs(Config.result_save_dir, exist_ok=True)
+        
 
 # 在import的时候就初始化
 Config.init()
