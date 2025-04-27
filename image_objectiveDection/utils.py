@@ -24,6 +24,11 @@ def box_iou(box1, box2):
     return iou  # (N, M)
 
 def compute_map(preds_all, targets_all, iou_thresh=0.5):
+    """
+    Compute simplified mean AP, precision, recall.
+    preds_all: list of tensors, each is (N, 5+num_classes)
+    targets_all: list of ground-truth boxes (tensor or list of tensors)
+    """
     tp = 0
     fp = 0
     fn = 0
@@ -49,12 +54,11 @@ def compute_map(preds_all, targets_all, iou_thresh=0.5):
         pred_boxes = preds[pred_mask][..., :4]
         pred_boxes = decode_boxes(pred_boxes)
 
-        # 🔥 保证 true_boxes 一定是 (N, 4) 格式
         if isinstance(targets, torch.Tensor):
             if targets.ndim == 1 and targets.size(0) == 4:
-                true_boxes = targets.unsqueeze(0).to(pred_boxes.device)  # (1,4)
+                true_boxes = targets.unsqueeze(0).to(pred_boxes.device)
             else:
-                true_boxes = targets.to(pred_boxes.device)  # 已经是(N,4)
+                true_boxes = targets.to(pred_boxes.device)
         else:
             true_boxes = torch.stack(targets).to(pred_boxes.device)
 
@@ -71,7 +75,6 @@ def compute_map(preds_all, targets_all, iou_thresh=0.5):
     mAP = precision * recall
 
     return mAP, precision, recall
-
 
 def decode_boxes(boxes):
     """
@@ -95,5 +98,66 @@ def set_seed(seed):
         torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
+class CIoULoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, pred_boxes, true_boxes):
+        """
+        pred_boxes: (N, 4)
+        true_boxes: (N, 4)
+        """
+        pred_boxes = decode_boxes(pred_boxes)
+        true_boxes = decode_boxes(true_boxes)
+
+        pred_x1, pred_y1, pred_x2, pred_y2 = pred_boxes[:, 0], pred_boxes[:, 1], pred_boxes[:, 2], pred_boxes[:, 3]
+        true_x1, true_y1, true_x2, true_y2 = true_boxes[:, 0], true_boxes[:, 1], true_boxes[:, 2], true_boxes[:, 3]
+
+        pred_w = pred_x2 - pred_x1
+        pred_h = pred_y2 - pred_y1
+        true_w = true_x2 - true_x1
+        true_h = true_y2 - true_y1
+
+        pred_cx = (pred_x1 + pred_x2) / 2
+        pred_cy = (pred_y1 + pred_y2) / 2
+        true_cx = (true_x1 + true_x2) / 2
+        true_cy = (true_y1 + true_y2) / 2
+
+        inter_x1 = torch.max(pred_x1, true_x1)
+        inter_y1 = torch.max(pred_y1, true_y1)
+        inter_x2 = torch.min(pred_x2, true_x2)
+        inter_y2 = torch.min(pred_y2, true_y2)
+
+        inter_w = (inter_x2 - inter_x1).clamp(min=0)
+        inter_h = (inter_y2 - inter_y1).clamp(min=0)
+        inter_area = inter_w * inter_h
+
+        pred_area = pred_w * pred_h
+        true_area = true_w * true_h
+        union_area = pred_area + true_area - inter_area
+
+        iou = inter_area / (union_area + 1e-7)
+
+        center_dist = (pred_cx - true_cx) ** 2 + (pred_cy - true_cy) ** 2
+
+        enc_x1 = torch.min(pred_x1, true_x1)
+        enc_y1 = torch.min(pred_y1, true_y1)
+        enc_x2 = torch.max(pred_x2, true_x2)
+        enc_y2 = torch.max(pred_y2, true_y2)
+        enc_w = enc_x2 - enc_x1
+        enc_h = enc_y2 - enc_y1
+        enc_diag = enc_w ** 2 + enc_h ** 2 + 1e-7
+
+        v = (4 / (np.pi ** 2)) * torch.pow(
+            torch.atan(true_w / (true_h + 1e-7)) - torch.atan(pred_w / (pred_h + 1e-7)), 2)
+        with torch.no_grad():
+            alpha = v / (1 - iou + v + 1e-7)
+
+        ciou = iou - center_dist / enc_diag - alpha * v
+
+        loss = 1 - ciou
+        return loss.mean()
+
 
 
