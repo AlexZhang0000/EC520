@@ -13,12 +13,23 @@ def map_target_to_feature_and_anchor(target, pred, feature_size, img_size):
     pred = pred.view(anchors_per_cell, feature_size, feature_size, -1)
 
     x1, y1, x2, y2 = target
+
+    # 🔥 防止异常框
+    if x2 <= x1 or y2 <= y1:
+        raise ValueError(f"Invalid target box with x1 >= x2 or y1 >= y2: {target}")
+
+    # 🔥 防止坐标越界
+    x1 = max(0.0, min(1.0, x1))
+    y1 = max(0.0, min(1.0, y1))
+    x2 = max(0.0, min(1.0, x2))
+    y2 = max(0.0, min(1.0, y2))
+
     cx = (x1 + x2) / 2
     cy = (y1 + y2) / 2
 
     scale = feature_size / img_size
-    grid_x = int(cx * scale)
-    grid_y = int(cy * scale)
+    grid_x = int(cx * scale * img_size)
+    grid_y = int(cy * scale * img_size)
 
     grid_x = max(0, min(grid_x, feature_size - 1))
     grid_y = max(0, min(grid_y, feature_size - 1))
@@ -104,7 +115,11 @@ def train(train_distortion=None):
                 feature_size = 40
                 img_size = Config.img_size
 
-                grid_x, grid_y, anchor_idx = map_target_to_feature_and_anchor(target, pred, feature_size, img_size)
+                try:
+                    grid_x, grid_y, anchor_idx = map_target_to_feature_and_anchor(target, pred, feature_size, img_size)
+                except Exception as e:
+                    print(f"Skipping bad target: {target}, reason: {e}")
+                    continue
 
                 pred = pred.view(3, feature_size, feature_size, -1)
 
@@ -121,7 +136,7 @@ def train(train_distortion=None):
 
                 true_obj = torch.ones(1, device=Config.device)
 
-                label = torch.tensor(int(label), device=Config.device)  # ✅ 转成Tensor
+                label = torch.tensor(int(label), device=Config.device)
                 true_cls = torch.nn.functional.one_hot(label, Config.num_classes).float()
 
                 loc_loss = box_loss(pred_box.unsqueeze(0), true_box.unsqueeze(0))
