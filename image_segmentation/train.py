@@ -6,17 +6,20 @@ from config import Config
 from dataloader import get_loader
 from model import UNet
 from utils import compute_iou
+from tqdm import tqdm
 
 def train():
     torch.manual_seed(Config.seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(Config.seed)
 
+    # 加载数据
     train_loader = get_loader(Config.data_root, batch_size=Config.batch_size, mode='train')
     val_loader = get_loader(Config.data_root, batch_size=Config.batch_size, mode='val')
 
+    # 初始化模型
     model = UNet(n_classes=Config.num_classes).to(Config.device)
-    criterion = nn.CrossEntropyLoss(ignore_index=255)
+    criterion = nn.CrossEntropyLoss(ignore_index=255)  # ✅ 关键修改
     optimizer = optim.Adam(model.parameters(), lr=Config.learning_rate, weight_decay=Config.weight_decay)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.5)
 
@@ -26,7 +29,10 @@ def train():
         model.train()
         running_loss = 0.0
 
-        for images, masks in train_loader:
+        # 🔥加上tqdm进度条
+        loop = tqdm(train_loader, desc=f'Epoch [{epoch}/{Config.num_epochs}]', leave=False)
+
+        for images, masks in loop:
             images = images.to(Config.device)
             masks = masks.to(Config.device)
 
@@ -39,8 +45,12 @@ def train():
 
             running_loss += loss.item() * images.size(0)
 
+            # 每个batch动态更新tqdm描述
+            loop.set_postfix(loss=loss.item())
+
         train_loss = running_loss / len(train_loader.dataset)
 
+        # 验证
         model.eval()
         preds_all = []
         masks_all = []
@@ -63,6 +73,7 @@ def train():
 
         print(f"Epoch [{epoch}/{Config.num_epochs}] | Train Loss: {train_loss:.4f} | Val mIoU: {val_miou:.4f}")
 
+        # 保存最好的模型
         if val_miou > best_miou:
             best_miou = val_miou
             torch.save(model.state_dict(), os.path.join(Config.model_save_path, 'best_model.pth'))
@@ -73,5 +84,6 @@ def train():
 
 if __name__ == '__main__':
     train()
+
 
 
