@@ -14,11 +14,9 @@ def map_target_to_feature_and_anchor(target, pred, feature_size, img_size):
 
     x1, y1, x2, y2 = target
 
-    # 🔥 防止异常框
     if x2 <= x1 or y2 <= y1:
-        raise ValueError(f"Invalid target box with x1 >= x2 or y1 >= y2: {target}")
+        raise ValueError(f"Invalid target box: {target}")
 
-    # 🔥 防止坐标越界
     x1 = max(0.0, min(1.0, x1))
     y1 = max(0.0, min(1.0, y1))
     x2 = max(0.0, min(1.0, x2))
@@ -54,6 +52,14 @@ def map_target_to_feature_and_anchor(target, pred, feature_size, img_size):
             best_anchor = anchor_idx
 
     return grid_x, grid_y, best_anchor
+
+def is_bad_targets(target_list):
+    if len(target_list) == 0:
+        return True
+    for t in target_list:
+        if not (t == torch.zeros_like(t)).all():
+            return False
+    return True
 
 def train(train_distortion=None):
     set_seed(Config.seed)
@@ -104,10 +110,10 @@ def train(train_distortion=None):
                 target_list = targets[b]
                 label_list = labels[b]
 
-                if len(label_list) == 0:
+                # 🔥 跳过垃圾图片
+                if is_bad_targets(target_list):
                     continue
 
-                # 🔥 每张图只随机取一个目标
                 obj_idx = torch.randint(0, len(label_list), (1,)).item()
                 target = target_list[obj_idx]
                 label = label_list[obj_idx]
