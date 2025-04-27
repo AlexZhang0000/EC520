@@ -1,22 +1,23 @@
+import numpy as np
 import torch
 
-def compute_iou(preds, masks, num_classes):
-    ious = []
+def compute_iou(preds, labels, num_classes):
     preds = preds.view(-1)
-    masks = masks.view(-1)
+    labels = labels.view(-1)
 
-    for cls in range(num_classes):
-        pred_inds = (preds == cls)
-        target_inds = (masks == cls)
-        intersection = (pred_inds[target_inds]).long().sum().item()
-        union = pred_inds.long().sum().item() + target_inds.long().sum().item() - intersection
+    mask = labels != 255
+    preds = preds[mask]
+    labels = labels[mask]
 
-        if union == 0:
-            iou = float('nan')
-        else:
-            iou = intersection / union
+    hist = torch.bincount(
+        num_classes * labels + preds,
+        minlength=num_classes**2
+    ).reshape(num_classes, num_classes).float()
 
-        ious.append(iou)
+    intersection = torch.diag(hist)
+    union = hist.sum(1) + hist.sum(0) - intersection
 
-    miou = np.nanmean(ious)
-    return ious, miou
+    iou = intersection / (union + 1e-6)
+    miou = iou.mean().item()
+
+    return iou.cpu().numpy(), miou
