@@ -6,9 +6,17 @@ import torch.nn as nn
 from config import Config
 from dataloader import get_loader
 from model import YOLOv5Backbone
-from utils import compute_map, set_seed, CIoULoss
+from utils import compute_map, set_seed, CIoULoss, decode_boxes, box_iou
 
-def map_target_to_feature(target, feature_size, img_size):
+def map_target_to_feature_and_anchor(target, pred, feature_size, img_size):
+    """
+    找到GT box对应的feature map格子和最佳anchor
+    target: (x1,y1,x2,y2)
+    pred: (4800, 5+num_classes)
+    """
+    anchors_per_cell = 3
+    pred = pred.view(anchors_per_cell, feature_size, feature_size, -1)
+
     x1, y1, x2, y2 = target
     cx = (x1 + x2) / 2
     cy = (y1 + y2) / 2
@@ -20,7 +28,26 @@ def map_target_to_feature(target, feature_size, img_size):
     grid_x = max(0, min(grid_x, feature_size - 1))
     grid_y = max(0, min(grid_y, feature_size - 1))
 
-    return grid_x, grid_y
+    gt_cx = cx
+    gt_cy = cy
+    gt_w = x2 - x1
+    gt_h = y2 - y1
+    gt_box = torch.tensor([gt_cx, gt_cy, gt_w, gt_h], device=pred.device).unsqueeze(0)
+
+    max_iou = 0
+    best_anchor = 0
+
+    for anchor_idx in range(anchors_per_cell):
+        pred_box = pred[anchor_idx, grid_y, grid_x, :4].unsqueeze(0)
+        pred_box_decoded = decode_boxes(pred_box)
+        gt_box_decoded = decode_boxes(gt_box)
+        iou = box_iou(pred_box_decoded, gt_box_decoded)
+
+        if iou.item() > max_iou:
+            max_iou = iou.item()
+            best_anchor = anchor_idx
+
+    return grid_x, grid_y, best_anchor
 
 def train(train_distortion=None):
     set_seed(Config.seed)
@@ -74,15 +101,13 @@ def train(train_distortion=None):
                     feature_size = 40
                     img_size = Config.img_size
 
-                    grid_x, grid_y = map_target_to_feature(target, feature_size, img_size)
+                    grid_x, grid_y, anchor_idx = map_target_to_feature_and_anchor(target, pred, feature_size, img_size)
 
-                    anchor_idx = 0
+                    pred = pred.view(3, feature_size, feature_size, -1)
 
-                    pred_idx = (anchor_idx * feature_size * feature_size) + (grid_y * feature_size) + grid_x
-
-                    pred_box = pred[pred_idx, :4]
-                    pred_obj = pred[pred_idx, 4].unsqueeze(0)
-                    pred_cls = pred[pred_idx, 5:]
+                    pred_box = pred[anchor_idx, grid_y, grid_x, :4]
+                    pred_obj = pred[anchor_idx, grid_y, grid_x, 4].unsqueeze(0)
+                    pred_cls = pred[anchor_idx, grid_y, grid_x, 5:]
 
                     x1, y1, x2, y2 = target
                     cx = (x1 + x2) / 2
