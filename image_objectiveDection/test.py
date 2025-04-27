@@ -6,13 +6,20 @@ from dataloader import get_loader
 from model import YOLOv5Backbone
 from utils import compute_map
 
-def test(model_path, distortion=None):
+def test(model_suffix='', test_distortion=None):
     torch.manual_seed(Config.seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(Config.seed)
 
-    # 加载验证集（可以加distortion）
-    val_loader = get_loader(batch_size=Config.batch_size, mode='val', distortion=distortion)
+    # 构造模型路径
+    model_filename = f"best_model{model_suffix}.pth"
+    model_path = os.path.join(Config.model_save_path, model_filename)
+
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Model not found at {model_path}")
+
+    # 加载验证集（可以加失真）
+    val_loader = get_loader(batch_size=Config.batch_size, mode='val', distortion=test_distortion)
 
     # 加载模型
     model = YOLOv5Backbone(num_classes=Config.num_classes).to(Config.device)
@@ -37,8 +44,9 @@ def test(model_path, distortion=None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_path', type=str, required=True, help='Path to the trained model')
-    parser.add_argument('--distortion', type=str, default=None, help='distortion type during testing (optional)')
+    parser.add_argument('--model_suffix', type=str, default='', help='Suffix for the model filename')
+    parser.add_argument('--test_distortion', type=str, default=None, help='Test-time distortion type')
     args = parser.parse_args()
 
-    test(model_path=args.model_path, distortion=args.distortion)
+    test(model_suffix=args.model_suffix, test_distortion=args.test_distortion)
+
