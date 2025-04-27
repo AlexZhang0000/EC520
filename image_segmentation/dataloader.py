@@ -38,8 +38,8 @@ class OxfordPetsDataset(torch.utils.data.Dataset):
         return img, mask
 
 def get_loader(root, batch_size=16, mode='train', shuffle=True, num_workers=2):
-    # Oxford Pets官方没有官方val/test划分，我们用trainval
-    dataset = OxfordPetsDataset(root=root, split='trainval')
+    split = 'trainval' if mode == 'train' else 'test'
+    dataset = OxfordPetsDataset(root=root, split=split)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=(mode=='train'), num_workers=num_workers)
     return loader
 
