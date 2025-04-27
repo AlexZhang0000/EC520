@@ -2,13 +2,13 @@ import torch
 import os
 
 class Config:
-    project_name = 'image_segmentation_camvid'
+    project_name = 'image_segmentation_voc4classes'
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     seed = 42
 
     # Dataset
-    data_root = './Data/CamVid'
-    num_classes = 11  # ✅CamVid只有11类！
+    data_root = './Data/VOCdevkit'
+    num_classes = 4  # ✅ 背景 + 天空 + 人 + 汽车
 
     # Training
     batch_size = 16
@@ -22,3 +22,4 @@ class Config:
 
     os.makedirs(model_save_path, exist_ok=True)
     os.makedirs(results_save_path, exist_ok=True)
+
