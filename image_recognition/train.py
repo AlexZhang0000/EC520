@@ -9,45 +9,39 @@ import argparse
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--distortion', type=str, default=None,
-                        help="Distortion format: gaussianblur:kernel_size,sigma/...")
+    parser.add_argument('--train_distortion', type=str, default=None,
+                        help="Distortion format for training data: gaussianblur:kernel_size,sigma/...")
     return parser.parse_args()
 
-def make_suffix(distortion, mode):
+def make_suffix(distortion, mode='train'):
     if distortion is None:
-        return ''
+        return '_clean'
     clean_distortion = distortion.replace('/', '_').replace(':', '_').replace(',', '_')
-    return f"_{mode}_{clean_distortion}"
+    return f"_distorted_{clean_distortion}"
 
 def train():
     args = parse_args()
 
-    # Set random seed
     torch.manual_seed(Config.seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(Config.seed)
 
-    # Create save directories
     os.makedirs(Config.model_save_path, exist_ok=True)
     os.makedirs(Config.results_save_path, exist_ok=True)
 
     # Prepare data loaders
-    train_loader = get_loader(Config.train_data_dir, batch_size=Config.batch_size, mode='train', distortion=args.distortion)
-    val_loader = get_loader(Config.test_data_dir, batch_size=Config.batch_size, mode='val', distortion=args.distortion)
+    train_loader = get_loader(Config.train_data_dir, batch_size=Config.batch_size, mode='train', distortion=args.train_distortion)
+    val_loader = get_loader(Config.test_data_dir, batch_size=Config.batch_size, mode='val', distortion=None)  # validation always clean!
 
-    # Create model
     model = ResNet18(num_classes=Config.num_classes).to(Config.device)
-
-    # Define loss and optimizer
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=Config.learning_rate,
                           momentum=Config.momentum, weight_decay=Config.weight_decay)
 
     best_val_acc = 0.0
 
-    save_suffix = make_suffix(args.distortion, 'train')
+    save_suffix = make_suffix(args.train_distortion)
 
-    # Training loop
     for epoch in range(1, Config.num_epochs + 1):
         model.train()
         running_loss = 0.0
@@ -73,7 +67,7 @@ def train():
         train_loss = running_loss / total
         train_acc = 100. * correct / total
 
-        # Validation
+        # Validation (always clean val set)
         model.eval()
         val_loss = 0.0
         val_correct = 0
@@ -98,7 +92,6 @@ def train():
               f'Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}% '
               f'| Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.2f}%')
 
-        # Save best model
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             save_name = f"best_model{save_suffix}.pth"
