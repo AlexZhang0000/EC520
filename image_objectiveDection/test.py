@@ -9,11 +9,10 @@ from utils import compute_map, set_seed
 def test(model_suffix='', test_distortion=None):
     set_seed(Config.seed)
 
-    print(f"Using device: {Config.device}")
+    print(f"✅ Using device: {Config.device}")
 
-    # 模型路径
     model_filename = f"best_model{model_suffix}.pth"
-    model_path = os.path.join(Config.base_save_dir, model_filename)
+    model_path = os.path.join(Config.model_save_path, model_filename)
 
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model not found at {model_path}")
@@ -22,11 +21,8 @@ def test(model_suffix='', test_distortion=None):
 
     model = YOLOv5Backbone(num_classes=Config.num_classes).to(Config.device)
 
-    try:
-        checkpoint = torch.load(model_path, map_location=Config.device)
-        model.load_state_dict(checkpoint)
-    except Exception as e:
-        raise RuntimeError(f"Error loading model checkpoint: {e}")
+    checkpoint = torch.load(model_path, map_location=Config.device)
+    model.load_state_dict(checkpoint)
 
     model.eval()
 
@@ -37,12 +33,13 @@ def test(model_suffix='', test_distortion=None):
         for imgs, targets, labels in val_loader:
             imgs = imgs.to(Config.device)
             preds = model(imgs)
-            preds_all.extend(preds)
-            targets_all.extend(targets)
+            for pred, target_list in zip(preds, targets):
+                preds_all.append(pred)
+                targets_all.append(target_list)
 
     mAP, precision, recall = compute_map(preds_all, targets_all)
 
-    print(f"Test Results -> mAP: {mAP:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+    print(f"🏁 Test Results -> mAP: {mAP:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
