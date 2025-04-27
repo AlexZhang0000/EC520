@@ -9,11 +9,6 @@ from model import YOLOv5Backbone
 from utils import compute_map, set_seed, CIoULoss, decode_boxes, box_iou
 
 def map_target_to_feature_and_anchor(target, pred, feature_size, img_size):
-    """
-    找到GT box对应的feature map格子和最佳anchor
-    target: (x1,y1,x2,y2)
-    pred: (4800, 5+num_classes)
-    """
     anchors_per_cell = 3
     pred = pred.view(anchors_per_cell, feature_size, feature_size, -1)
 
@@ -69,6 +64,16 @@ def train(train_distortion=None):
         weight_decay=Config.weight_decay
     )
 
+    # 🚀 加上学习率调度器：Warmup + CosineAnnealing
+    def lr_lambda(current_epoch):
+        warmup_epochs = 5
+        if current_epoch < warmup_epochs:
+            return (current_epoch + 1) / warmup_epochs
+        else:
+            return 0.5 * (1 + torch.cos(torch.tensor((current_epoch - warmup_epochs) / (Config.epochs - warmup_epochs) * 3.1415926535))).item()
+
+    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+
     best_map = 0.0
 
     for epoch in range(1, Config.epochs + 1):
@@ -123,11 +128,18 @@ def train(train_distortion=None):
                     obj_loss = bce_loss(pred_obj, true_obj)
                     cls_loss = bce_loss(pred_cls, true_cls)
 
+                    # 🔥 Loss加权
+                    loc_loss = 5.0 * loc_loss
+                    obj_loss = 1.0 * obj_loss
+                    cls_loss = 1.0 * cls_loss
+
                     loss += loc_loss + obj_loss + cls_loss
 
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
+
+        scheduler.step()
 
         avg_loss = total_loss / len(train_loader)
 
@@ -152,7 +164,7 @@ def train(train_distortion=None):
             save_filename = f"best_model{'_' + train_distortion if train_distortion else '_clean'}.pth"
             save_path = os.path.join(Config.model_save_path, save_filename)
             torch.save(model.state_dict(), save_path)
-           
+            print(f"💾 Saved best model to {save_path}")
 
     print("✅ Training finished.")
 
