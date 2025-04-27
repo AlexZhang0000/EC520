@@ -2,7 +2,7 @@ import os
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
-from torchvision.datasets import ADE20K
+from torchvision.datasets.ade20k import ADE20K
 import torchvision.transforms as T
 from PIL import Image
 
