@@ -53,7 +53,7 @@ def test():
     print(f"\nFinal mean IoU (mIoU): {miou:.4f}")
     print_iou(ious)
 
-    # 保存测试结果
+    # Save test results
     os.makedirs(Config.results_save_path, exist_ok=True)
     save_path = os.path.join(Config.results_save_path, f'test_results{distortion_suffix}.txt')
     with open(save_path, 'w') as f:
