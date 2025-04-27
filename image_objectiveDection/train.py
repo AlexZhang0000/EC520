@@ -1,3 +1,5 @@
+# --- train.py (改良版) ---
+
 import os
 import argparse
 import torch
@@ -101,7 +103,7 @@ def train(train_distortion=None):
             optimizer.zero_grad()
             preds = model(imgs)
 
-            loss = torch.tensor(0.0, device=Config.device, requires_grad=True)
+            loss = 0.0  # 使用Python float
 
             batch_size = imgs.size(0)
 
@@ -148,8 +150,9 @@ def train(train_distortion=None):
                     obj_loss = 1.0 * bce_loss(pred_obj, true_obj)
                     cls_loss = 1.0 * bce_loss(pred_cls, true_cls)
 
-                    loss = loss + loc_loss + obj_loss + cls_loss
+                    loss = loss + (loc_loss + obj_loss + cls_loss)
 
+            loss = loss / batch_size  # 加一个平均，防止数值爆炸
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
@@ -188,7 +191,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     train(train_distortion=args.train_distortion)
-
 
 
 
