@@ -6,4 +6,4 @@ scikit-learn
 albumentations
 seaborn
 tqdm
-gdown
+
