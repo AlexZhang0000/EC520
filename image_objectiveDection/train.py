@@ -120,7 +120,9 @@ def train(train_distortion=None):
                 true_box = torch.tensor([cx, cy, w, h], device=Config.device)
 
                 true_obj = torch.ones(1, device=Config.device)
-                true_cls = torch.nn.functional.one_hot(int(label), Config.num_classes).float().to(Config.device)  # ✅ 修好这里，转int
+
+                label = torch.tensor(int(label), device=Config.device)  # ✅ 转成Tensor
+                true_cls = torch.nn.functional.one_hot(label, Config.num_classes).float()
 
                 loc_loss = box_loss(pred_box.unsqueeze(0), true_box.unsqueeze(0))
                 obj_loss = bce_loss(pred_obj, true_obj)
@@ -170,6 +172,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     train(train_distortion=args.train_distortion)
+
 
 
 
