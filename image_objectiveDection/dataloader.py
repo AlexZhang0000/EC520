@@ -142,10 +142,11 @@ class VOCDetectionSubset(torch.utils.data.Dataset):
 
 # --- Loader封装 ---
 
-def get_loader(root='./data', batch_size=16, mode='train', shuffle=True, num_workers=2, distortion=None):
+def get_loader(root='./data', batch_size=16, mode='train', shuffle=True, num_workers=2, distortion=None, pin_memory=False):
     dataset = VOCDetectionSubset(root=root, year='2007', image_set=mode, download=True, distortion=distortion)
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=(mode == 'train'), num_workers=num_workers, collate_fn=collate_fn)
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=(mode == 'train'), num_workers=num_workers, pin_memory=pin_memory, collate_fn=collate_fn)
     return loader
+
 
 def collate_fn(batch):
     imgs, targets, labels = list(zip(*batch))
