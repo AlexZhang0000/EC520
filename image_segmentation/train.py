@@ -2,24 +2,24 @@ import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import argparse
 from config import Config
 from dataloader import get_loader
 from model import UNet
 from utils import compute_iou
-from tqdm import tqdm
 
-def train():
+def train(train_distortion=None):
     torch.manual_seed(Config.seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(Config.seed)
 
-    train_loader = get_loader(Config.data_root, batch_size=Config.batch_size, mode='train')
-    val_loader = get_loader(Config.data_root, batch_size=Config.batch_size, mode='test')
+    train_loader = get_loader(Config.data_root, batch_size=Config.batch_size, mode='train', distortion=train_distortion)
+    val_loader = get_loader(Config.data_root, batch_size=Config.batch_size, mode='val', distortion=None)
 
     model = UNet(n_classes=Config.num_classes).to(Config.device)
     criterion = nn.CrossEntropyLoss(ignore_index=255)
     optimizer = optim.Adam(model.parameters(), lr=Config.learning_rate, weight_decay=Config.weight_decay)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.5)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.5)
 
     best_miou = 0.0
 
@@ -27,9 +27,7 @@ def train():
         model.train()
         running_loss = 0.0
 
-        loop = tqdm(train_loader, desc=f'Epoch [{epoch}/{Config.num_epochs}]', leave=False)
-
-        for images, masks in loop:
+        for images, masks in train_loader:
             images = images.to(Config.device)
             masks = masks.to(Config.device)
 
@@ -41,7 +39,6 @@ def train():
             optimizer.step()
 
             running_loss += loss.item() * images.size(0)
-            loop.set_postfix(loss=loss.item())
 
         train_loss = running_loss / len(train_loader.dataset)
 
@@ -69,14 +66,27 @@ def train():
 
         if val_miou > best_miou:
             best_miou = val_miou
-            torch.save(model.state_dict(), os.path.join(Config.model_save_path, 'best_model.pth'))
+            os.makedirs(Config.model_save_path, exist_ok=True)
+
+            if train_distortion is None:
+                model_name = 'best_model.pth'
+            else:
+                distortion_name = train_distortion.replace(':', '_').replace('/', '_')
+                model_name = f'best_model_{distortion_name}.pth'
+
+            torch.save(model.state_dict(), os.path.join(Config.model_save_path, model_name))
 
         scheduler.step()
 
     print('Training finished.')
 
 if __name__ == '__main__':
-    train()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--train_distortion', type=str, default=None,
+                        help="Specify distortion for training (optional), e.g., gaussianblur:5,1.0 / aliasing:4 / jpegcompression:20")
+    args = parser.parse_args()
+
+    train(train_distortion=args.train_distortion)
 
 
 
