@@ -4,27 +4,30 @@ import torch
 from config import Config
 from dataloader import get_loader
 from model import YOLOv5Backbone
-from utils import compute_map
+from utils import compute_map, set_seed
 
 def test(model_suffix='', test_distortion=None):
-    torch.manual_seed(Config.seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(Config.seed)
+    set_seed(Config.seed)
 
-    # 构造模型路径
+    print(f"Using device: {Config.device}")
+
+    # 模型路径
     model_filename = f"best_model{model_suffix}.pth"
-    model_path = os.path.join(Config.model_save_path, model_filename)
+    model_path = os.path.join(Config.base_save_dir, model_filename)
 
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model not found at {model_path}")
 
-    # 加载验证集（可以加失真）
-    val_loader = get_loader(batch_size=Config.batch_size, mode='val', distortion=test_distortion)
+    val_loader = get_loader(batch_size=Config.batch_size, mode='val', distortion=test_distortion, pin_memory=True)
 
-    # 加载模型
     model = YOLOv5Backbone(num_classes=Config.num_classes).to(Config.device)
-    checkpoint = torch.load(model_path, map_location=Config.device)
-    model.load_state_dict(checkpoint)
+
+    try:
+        checkpoint = torch.load(model_path, map_location=Config.device)
+        model.load_state_dict(checkpoint)
+    except Exception as e:
+        raise RuntimeError(f"Error loading model checkpoint: {e}")
+
     model.eval()
 
     preds_all = []
@@ -37,7 +40,6 @@ def test(model_suffix='', test_distortion=None):
             preds_all.extend(preds)
             targets_all.extend(targets)
 
-    # 计算mAP, precision, recall
     mAP, precision, recall = compute_map(preds_all, targets_all)
 
     print(f"Test Results -> mAP: {mAP:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
@@ -49,4 +51,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     test(model_suffix=args.model_suffix, test_distortion=args.test_distortion)
+
+
 
