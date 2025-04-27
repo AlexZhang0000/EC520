@@ -14,30 +14,34 @@ def map_target_to_feature_and_anchor(target, pred, feature_size, img_size):
 
     x1, y1, x2, y2 = target
 
+    # 1.防止无效框
     if x2 <= x1 or y2 <= y1:
         raise ValueError(f"Invalid target box: {target}")
 
+    # 2.标准化
     x1 = max(0.0, min(1.0, x1))
     y1 = max(0.0, min(1.0, y1))
     x2 = max(0.0, min(1.0, x2))
     y2 = max(0.0, min(1.0, y2))
 
+    # 3. 直接用图片比例算 grid
     cx = (x1 + x2) / 2
     cy = (y1 + y2) / 2
 
-    scale = feature_size / img_size
-    grid_x = int(cx * scale * img_size)
-    grid_y = int(cy * scale * img_size)
+    grid_x = int(cx * feature_size)
+    grid_y = int(cy * feature_size)
 
     grid_x = max(0, min(grid_x, feature_size - 1))
     grid_y = max(0, min(grid_y, feature_size - 1))
 
-    gt_cx = cx
-    gt_cy = cy
-    gt_w = x2 - x1
-    gt_h = y2 - y1
+    gt_cx = cx * img_size
+    gt_cy = cy * img_size
+    gt_w = (x2 - x1) * img_size
+    gt_h = (y2 - y1) * img_size
+
     gt_box = torch.tensor([gt_cx, gt_cy, gt_w, gt_h], device=pred.device).unsqueeze(0)
 
+    # 4. 选择最佳anchor
     max_iou = 0
     best_anchor = 0
 
@@ -134,10 +138,10 @@ def train(train_distortion=None):
                 pred_cls = pred[anchor_idx, grid_y, grid_x, 5:]
 
                 x1, y1, x2, y2 = target
-                cx = (x1 + x2) / 2
-                cy = (y1 + y2) / 2
-                w = (x2 - x1)
-                h = (y2 - y1)
+                cx = (x1 + x2) / 2 * img_size
+                cy = (y1 + y2) / 2 * img_size
+                w = (x2 - x1) * img_size
+                h = (y2 - y1) * img_size
                 true_box = torch.tensor([cx, cy, w, h], device=Config.device)
 
                 true_obj = torch.ones(1, device=Config.device)
@@ -149,7 +153,8 @@ def train(train_distortion=None):
                 obj_loss = bce_loss(pred_obj, true_obj)
                 cls_loss = bce_loss(pred_cls, true_cls)
 
-                loc_loss = 5.0 * loc_loss
+                # ✨ 新的合理loss权重
+                loc_loss = 2.0 * loc_loss
                 obj_loss = 1.0 * obj_loss
                 cls_loss = 1.0 * cls_loss
 
@@ -178,6 +183,9 @@ def train(train_distortion=None):
         mAP, precision, recall = compute_map(preds_all, targets_all)
 
         print(f"🧹 Epoch [{epoch}/{Config.epochs}] | Loss: {avg_loss:.4f} | Val mAP: {mAP:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+
+        if epoch <= 5:  # 🔥 前5轮打印额外信息
+            print(f"    [DEBUG] Sample pred: obj {pred_obj.sigmoid().item():.4f}, first cls {pred_cls.softmax(0)[0].item():.4f}")
 
         if mAP > best_map:
             best_map = mAP
