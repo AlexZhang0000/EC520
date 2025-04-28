@@ -1,4 +1,4 @@
-# --- train.py (改良版) ---
+# --- train.py (完全修正版) ---
 
 import os
 import argparse
@@ -8,7 +8,15 @@ import torch.nn as nn
 from config import Config
 from dataloader import get_loader
 from model import YOLOv5Backbone
-from utils import compute_map, set_seed, SimpleBoxLoss, decode_boxes, box_iou
+from utils import compute_map, set_seed, decode_boxes, box_iou
+
+class SimpleBoxLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.loss_fn = nn.L1Loss()  # 【新】用L1Loss
+
+    def forward(self, pred_boxes, true_boxes):
+        return self.loss_fn(pred_boxes, true_boxes)
 
 def map_target_to_feature_and_anchor(target, pred, feature_size, img_size):
     anchors_per_cell = 3
@@ -115,7 +123,7 @@ def train(train_distortion=None):
                 if is_bad_targets(target_list):
                     continue
 
-                num_objs = min(3, len(label_list))
+                num_objs = min(10, len(label_list))  # 【新】最多采10个目标
                 for obj_idx in torch.randperm(len(label_list))[:num_objs]:
                     target = target_list[obj_idx]
                     label = label_list[obj_idx]
@@ -131,7 +139,7 @@ def train(train_distortion=None):
                     pred = pred.view(3, feature_size, feature_size, -1)
 
                     pred_box = pred[anchor_idx, grid_y, grid_x, :4]
-                    pred_box = pred_box.clamp(-1e3, 1e3)  # 【新】clip预测算符，防止nan
+                    pred_box = pred_box.clamp(0, img_size)  # 【新】约束在图片规模内
 
                     pred_obj = pred[anchor_idx, grid_y, grid_x, 4].unsqueeze(0)
                     pred_cls = pred[anchor_idx, grid_y, grid_x, 5:]
@@ -197,7 +205,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     train(train_distortion=args.train_distortion)
-
 
 
 
