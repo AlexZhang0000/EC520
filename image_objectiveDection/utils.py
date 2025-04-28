@@ -27,7 +27,7 @@ def decode_boxes(boxes):
     y2 = cy + h / 2
     return torch.stack([x1, y1, x2, y2], dim=1)
 
-def compute_map(preds_all, targets_all, iou_thresh=0.01):
+def compute_map(preds_all, targets_all, iou_thresh=0.2):
     tp = 0
     fp = 0
     fn = 0
