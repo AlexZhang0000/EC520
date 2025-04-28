@@ -189,7 +189,7 @@ def train(train_distortion=None):
 
         mAP, precision, recall = compute_map(preds_all, targets_all)
 
-        print(f"🧹 Epoch [{epoch}/{Config.epochs}] | Loss: {avg_loss:.4f} | Val mAP: {mAP:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+        print(f"🧹 Epoch [{epoch}/{Config.epochs}] | Loss: {avg_loss:.4f} | Val mAP: {mAP:.10f} | Precision: {precision:.10f} | Recall: {recall:.4f}")
 
         if mAP > best_map:
             best_map = mAP
