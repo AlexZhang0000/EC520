@@ -1,5 +1,4 @@
 
-
 import os
 import argparse
 import torch
@@ -95,6 +94,11 @@ def train(train_distortion=None):
                     target = target_list[obj_idx]
                     label = label_list[obj_idx]
 
+                    # label安全检查
+                    label = int(label)
+                    if label >= Config.num_classes:
+                        continue
+
                     cx = (target[0] + target[2]) / 2
                     cy = (target[1] + target[3]) / 2
 
@@ -116,7 +120,6 @@ def train(train_distortion=None):
                     if best_out is None:
                         continue
 
-                    # 正确 reshape
                     pred = best_out.permute(1, 2, 0).contiguous().view(best_out.shape[1], best_out.shape[2], 3, -1)
                     pred = pred.permute(2, 0, 1, 3).contiguous()
 
@@ -132,7 +135,7 @@ def train(train_distortion=None):
 
                     true_box = torch.tensor([cx_gt, cy_gt, w_gt, h_gt], device=device)
                     true_obj = torch.ones(1, device=device)
-                    label = torch.tensor(int(label), device=device)
+                    label = torch.tensor(label, device=device)
                     true_cls = torch.nn.functional.one_hot(label, Config.num_classes).float()
 
                     loc_loss = 2.0 * box_loss(pred_box.unsqueeze(0), true_box.unsqueeze(0))
