@@ -1,4 +1,5 @@
 
+
 import os
 import argparse
 import torch
@@ -49,7 +50,6 @@ class CIoULoss(nn.Module):
 
 def train(train_distortion=None):
     set_seed(Config.seed)
-
     print(f"✅ Using device: {Config.device}")
     device = Config.device
 
@@ -57,16 +57,10 @@ def train(train_distortion=None):
     val_loader = get_loader(batch_size=Config.batch_size, mode='val', distortion=None, pin_memory=True)
 
     model = YOLOv5Backbone(num_classes=Config.num_classes).to(device)
-
     bce_loss = nn.BCEWithLogitsLoss()
     box_loss = CIoULoss()
 
-    optimizer = optim.AdamW(
-        model.parameters(),
-        lr=0.001,
-        weight_decay=Config.weight_decay
-    )
-
+    optimizer = optim.AdamW(model.parameters(), lr=0.001, weight_decay=Config.weight_decay)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=Config.epochs)
 
     best_map = 0.0
@@ -78,7 +72,7 @@ def train(train_distortion=None):
         for imgs, targets, labels in train_loader:
             imgs = imgs.to(device)
             optimizer.zero_grad()
-            outputs = model(imgs)  # outputs = [out_high, out_low]
+            outputs = model(imgs)  # [high-res, low-res]
 
             loss = None
             batch_size = imgs.size(0)
@@ -94,7 +88,6 @@ def train(train_distortion=None):
                     target = target_list[obj_idx]
                     label = label_list[obj_idx]
 
-                    # label安全检查
                     label = int(label)
                     if label >= Config.num_classes:
                         continue
@@ -126,6 +119,9 @@ def train(train_distortion=None):
                     pred_box = pred[0, best_grid_y, best_grid_x, :4]
                     pred_obj = pred[0, best_grid_y, best_grid_x, 4].unsqueeze(0)
                     pred_cls = pred[0, best_grid_y, best_grid_x, 5:]
+
+                    if torch.any(torch.isnan(pred_box)) or torch.any(torch.isinf(pred_box)):
+                        continue
 
                     img_size = Config.img_size
                     cx_gt = (target[0] + target[2]) / 2 * img_size
@@ -188,6 +184,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     train(train_distortion=args.train_distortion)
+
 
 
 
