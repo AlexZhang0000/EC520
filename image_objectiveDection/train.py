@@ -1,4 +1,4 @@
-# --- train_fast_improved.py (多尺度版本适配) ---
+
 
 import os
 import argparse
@@ -101,9 +101,8 @@ def train(train_distortion=None):
                     best_out = None
                     best_grid_x = None
                     best_grid_y = None
-                    best_scale = None
 
-                    for scale_idx, pred in enumerate(outputs):
+                    for pred in outputs:
                         _, h, w, _ = pred.shape
                         grid_x = int(cx * w)
                         grid_y = int(cy * h)
@@ -112,13 +111,14 @@ def train(train_distortion=None):
                             best_out = pred[b]
                             best_grid_x = grid_x
                             best_grid_y = grid_y
-                            best_scale = scale_idx
                             break
 
                     if best_out is None:
                         continue
 
-                    pred = best_out.view(3, best_out.shape[1] // 3, best_out.shape[2], -1)
+                    # 正确 reshape
+                    pred = best_out.permute(1, 2, 0).contiguous().view(best_out.shape[1], best_out.shape[2], 3, -1)
+                    pred = pred.permute(2, 0, 1, 3).contiguous()
 
                     pred_box = pred[0, best_grid_y, best_grid_x, :4]
                     pred_obj = pred[0, best_grid_y, best_grid_x, 4].unsqueeze(0)
@@ -162,7 +162,7 @@ def train(train_distortion=None):
             for imgs, targets, labels in val_loader:
                 imgs = imgs.to(device)
                 outputs = model(imgs)
-                preds = outputs[0]  # 用高分辨率输出进行评估（可以更智能融合）
+                preds = outputs[0]
                 for pred, target_list in zip(preds, targets):
                     preds_all.append(pred)
                     targets_all.append(target_list)
