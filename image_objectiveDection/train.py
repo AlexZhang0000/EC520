@@ -1,4 +1,4 @@
-
+# --- train_safe_improved.py (完整正式版，reshape正确+label安全检查+pred_box有效性检查，多尺度版) ---
 
 import os
 import argparse
@@ -128,6 +128,9 @@ def train(train_distortion=None):
                     cy_gt = (target[1] + target[3]) / 2 * img_size
                     w_gt = (target[2] - target[0]) * img_size
                     h_gt = (target[3] - target[1]) * img_size
+
+                    if w_gt <= 1 or h_gt <= 1:
+                        continue
 
                     true_box = torch.tensor([cx_gt, cy_gt, w_gt, h_gt], device=device)
                     true_obj = torch.ones(1, device=device)
