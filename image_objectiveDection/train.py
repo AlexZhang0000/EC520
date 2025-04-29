@@ -1,4 +1,4 @@
-# --- train_fast_improved.py ---
+# --- train_fast_improved.py (多尺度版本适配) ---
 
 import os
 import argparse
@@ -79,49 +79,58 @@ def train(train_distortion=None):
         for imgs, targets, labels in train_loader:
             imgs = imgs.to(device)
             optimizer.zero_grad()
-            preds = model(imgs)
+            outputs = model(imgs)  # outputs = [out_high, out_low]
 
             loss = None
             batch_size = imgs.size(0)
 
             for b in range(batch_size):
-                pred = preds[b]
                 target_list = targets[b]
                 label_list = labels[b]
 
                 if len(target_list) == 0:
                     continue
 
-                num_objs = min(10, len(label_list))
-                for obj_idx in torch.randperm(len(label_list))[:num_objs]:
+                for obj_idx in torch.randperm(len(label_list))[:min(10, len(label_list))]:
                     target = target_list[obj_idx]
                     label = label_list[obj_idx]
 
-                    feature_size = 40
-                    img_size = Config.img_size
+                    cx = (target[0] + target[2]) / 2
+                    cy = (target[1] + target[3]) / 2
 
-                    try:
-                        grid_x = int(((target[0] + target[2]) / 2) * feature_size)
-                        grid_y = int(((target[1] + target[3]) / 2) * feature_size)
-                        anchor_idx = 0
-                    except Exception as e:
+                    best_out = None
+                    best_grid_x = None
+                    best_grid_y = None
+                    best_scale = None
+
+                    for scale_idx, pred in enumerate(outputs):
+                        _, h, w, _ = pred.shape
+                        grid_x = int(cx * w)
+                        grid_y = int(cy * h)
+
+                        if 0 <= grid_x < w and 0 <= grid_y < h:
+                            best_out = pred[b]
+                            best_grid_x = grid_x
+                            best_grid_y = grid_y
+                            best_scale = scale_idx
+                            break
+
+                    if best_out is None:
                         continue
 
-                    pred = pred.view(3, feature_size, feature_size, -1)
+                    pred = best_out.view(3, best_out.shape[1] // 3, best_out.shape[2], -1)
 
-                    pred_box = pred[anchor_idx, grid_y, grid_x, :4]
-                    pred_box = pred_box.clamp(0, img_size)
+                    pred_box = pred[0, best_grid_y, best_grid_x, :4]
+                    pred_obj = pred[0, best_grid_y, best_grid_x, 4].unsqueeze(0)
+                    pred_cls = pred[0, best_grid_y, best_grid_x, 5:]
 
-                    pred_obj = pred[anchor_idx, grid_y, grid_x, 4].unsqueeze(0)
-                    pred_cls = pred[anchor_idx, grid_y, grid_x, 5:]
+                    img_size = Config.img_size
+                    cx_gt = (target[0] + target[2]) / 2 * img_size
+                    cy_gt = (target[1] + target[3]) / 2 * img_size
+                    w_gt = (target[2] - target[0]) * img_size
+                    h_gt = (target[3] - target[1]) * img_size
 
-                    x1, y1, x2, y2 = target
-                    cx = (x1 + x2) / 2 * img_size
-                    cy = (y1 + y2) / 2 * img_size
-                    w = (x2 - x1) * img_size
-                    h = (y2 - y1) * img_size
-                    true_box = torch.tensor([cx, cy, w, h], device=device)
-
+                    true_box = torch.tensor([cx_gt, cy_gt, w_gt, h_gt], device=device)
                     true_obj = torch.ones(1, device=device)
                     label = torch.tensor(int(label), device=device)
                     true_cls = torch.nn.functional.one_hot(label, Config.num_classes).float()
@@ -152,7 +161,8 @@ def train(train_distortion=None):
         with torch.no_grad():
             for imgs, targets, labels in val_loader:
                 imgs = imgs.to(device)
-                preds = model(imgs)
+                outputs = model(imgs)
+                preds = outputs[0]  # 用高分辨率输出进行评估（可以更智能融合）
                 for pred, target_list in zip(preds, targets):
                     preds_all.append(pred)
                     targets_all.append(target_list)
