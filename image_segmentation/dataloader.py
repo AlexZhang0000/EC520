@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 import torchvision.transforms as T
 from PIL import Image
 import io
+import torch.nn as nn
 
 # --- 自定义失真类 ---
 
@@ -60,10 +61,8 @@ class VOCSubsetDataset(torch.utils.data.Dataset):
         self.dataset = VOCSegmentation(root=root, year='2012', image_set=image_set, download=download)
         self.distortion = distortion
 
-        self.input_transform_list = [
-            T.Resize((256, 256)),
-            T.RandomHorizontalFlip()
-        ]
+        self.input_transform_list = [T.Resize((256, 256)), T.RandomHorizontalFlip()]
+        self.tensor_transform_list = []
 
         if self.distortion:
             distortions = self.distortion.split('/')
@@ -74,25 +73,25 @@ class VOCSubsetDataset(torch.utils.data.Dataset):
                     kernel_size = int(kernel_size)
                     sigma = float(sigma)
                     self.input_transform_list.append(T.GaussianBlur(kernel_size=kernel_size, sigma=sigma))
-                elif 'gaussiannoise' in d:
-                    mean, std = map(float, d.split(':')[1].split(','))
-                    self.input_transform_list.append(AddGaussianNoise(mean=mean, std=std))
                 elif 'aliasing' in d:
                     factor = int(d.split(':')[1])
                     self.input_transform_list.append(ApplyAliasing(factor=factor))
                 elif 'jpegcompression' in d:
                     quality = int(d.split(':')[1])
                     self.input_transform_list.append(ApplyJPEGCompression(quality=quality))
+                elif 'gaussiannoise' in d:
+                    mean, std = map(float, d.split(':')[1].split(','))
+                    self.tensor_transform_list.append(AddGaussianNoise(mean=mean, std=std))
                 else:
                     raise ValueError(f"Unsupported distortion type: {d}")
 
-        self.input_transform_list += [
+        # 拼接成完整 transform
+        self.input_transform = T.Compose(self.input_transform_list + [
             T.ToTensor(),
+        ] + self.tensor_transform_list + [
             T.Normalize(mean=[0.485, 0.456, 0.406],
                         std=[0.229, 0.224, 0.225])
-        ]
-
-        self.input_transform = T.Compose(self.input_transform_list)
+        ])
 
     def __len__(self):
         return len(self.dataset)
@@ -121,6 +120,7 @@ def get_loader(root, batch_size=16, mode='train', shuffle=True, num_workers=2, d
     dataset = VOCSubsetDataset(root=root, image_set='train' if mode == 'train' else 'val', download=True, distortion=distortion)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=(mode == 'train'), num_workers=num_workers)
     return loader
+
 
 
 
