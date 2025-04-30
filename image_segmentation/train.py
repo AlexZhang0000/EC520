@@ -13,10 +13,24 @@ def train(train_distortion=None):
     if torch.cuda.is_available():
         torch.cuda.manual_seed(Config.seed)
 
-    train_loader = get_loader(Config.data_root, batch_size=Config.batch_size, mode='train', distortion=train_distortion)
-    val_loader = get_loader(Config.data_root, batch_size=Config.batch_size, mode='val', distortion=None)
+    # GPU检测和动态batch size
+    num_gpus = torch.cuda.device_count()
+    print(f"✅ Detected {num_gpus} GPU(s).")
 
-    model = UNet(n_classes=Config.num_classes).to(Config.device)
+    base_batch_size = 16
+    effective_batch_size = base_batch_size * max(1, num_gpus)
+    print(f"✅ Using batch size: {effective_batch_size}")
+
+    # Data loaders
+    train_loader = get_loader(Config.data_root, batch_size=effective_batch_size, mode='train', distortion=train_distortion)
+    val_loader = get_loader(Config.data_root, batch_size=effective_batch_size, mode='val', distortion=None)
+
+    # 模型 + 多GPU并行
+    model = UNet(n_classes=Config.num_classes)
+    if num_gpus > 1:
+        model = torch.nn.DataParallel(model)
+    model = model.to(Config.device)
+
     criterion = nn.CrossEntropyLoss(ignore_index=255)
     optimizer = optim.Adam(model.parameters(), lr=Config.learning_rate, weight_decay=Config.weight_decay)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.5)
