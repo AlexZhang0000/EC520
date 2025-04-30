@@ -3,12 +3,12 @@ set -e
 
 echo "🟩 TRAINING PHASE"
 # 1. Train clean model
-python train.py
+# python train.py
 
 # 2. Train Gaussian Blur models
-python train.py --train_distortion gaussianblur:3,0.8
-python train.py --train_distortion gaussianblur:5,2.0
-python train.py --train_distortion gaussianblur:9,4.0
+# python train.py --train_distortion gaussianblur:3,0.8
+# python train.py --train_distortion gaussianblur:5,2.0
+# python train.py --train_distortion gaussianblur:9,4.0
 
 # 3. Train Gaussian Noise models
 python train.py --train_distortion gaussiannoise:0,0.02
