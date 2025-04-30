@@ -1,4 +1,5 @@
 import os
+import csv
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -36,6 +37,17 @@ def train(train_distortion=None):
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.5)
 
     best_miou = 0.0
+
+    # 日志路径
+    distortion_tag = 'clean' if train_distortion is None else train_distortion.replace(':', '_').replace('/', '_')
+    log_filename = f"train_log_{distortion_tag}.csv"
+    log_filepath = os.path.join(Config.result_save_path, log_filename)
+    os.makedirs(Config.result_save_path, exist_ok=True)
+
+    # 写入CSV表头
+    with open(log_filepath, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['epoch', 'val_miou'])
 
     for epoch in range(1, Config.num_epochs + 1):
         model.train()
@@ -78,6 +90,12 @@ def train(train_distortion=None):
 
         print(f"Epoch [{epoch}/{Config.num_epochs}] | Train Loss: {train_loss:.4f} | Val mIoU: {val_miou:.4f}")
 
+        # 记录 val_mIoU 到日志文件
+        with open(log_filepath, 'a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([epoch, val_miou])
+
+        # 保存最佳模型
         if val_miou > best_miou:
             best_miou = val_miou
             os.makedirs(Config.model_save_path, exist_ok=True)
@@ -101,6 +119,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     train(train_distortion=args.train_distortion)
+
 
 
 
