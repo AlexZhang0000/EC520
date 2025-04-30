@@ -121,7 +121,13 @@ def train(train_distortion=None):
                 if best_out is None:
                     continue
 
-                pred = best_out.permute(1, 2, 0).contiguous().view(h, w, 3, -1).permute(2, 0, 1, 3).contiguous()
+                C = best_out.shape[0]  # 通道数
+                _, h, w = best_out.shape
+                pred = best_out.view(C, h, w).permute(1, 2, 0).contiguous()  # (h, w, C)
+                num_anchors = 3
+                num_outputs = C // num_anchors
+                pred = pred.view(h, w, num_anchors, num_outputs).permute(2, 0, 1, 3).contiguous()  # (3, h, w, num_outputs)
+
                 pred_box = pred[0, best_grid_y, best_grid_x, :4]
                 pred_obj = pred[0, best_grid_y, best_grid_x, 4].unsqueeze(0)
                 pred_cls = pred[0, best_grid_y, best_grid_x, 5:]
