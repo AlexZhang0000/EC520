@@ -7,7 +7,7 @@ class Config:
     num_classes = len(classes)
 
     # 训练超参数
-    epochs = 70
+    epochs = 60
     batch_size = 4
     learning_rate = 0.001
     momentum = 0.9
