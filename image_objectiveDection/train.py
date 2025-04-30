@@ -69,7 +69,7 @@ def train(train_distortion=None):
     box_loss = CIoULoss()
     optimizer = optim.AdamW(model.parameters(), lr=0.001, weight_decay=Config.weight_decay)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=Config.epochs)
-    scaler = torch.amp.GradScaler(device_type='cuda') if torch.cuda.is_available() else None
+    scaler = torch.cuda.amp.GradScaler() if torch.cuda.is_available() else None
 
     best_map = 0.0
     log_suffix = train_distortion.replace('/', '_').replace(':', '_').replace(',', '_') if train_distortion else 'clean'
@@ -85,7 +85,7 @@ def train(train_distortion=None):
             imgs = imgs.to(device)
             optimizer.zero_grad()
 
-            with torch.amp.autocast(device_type='cuda', enabled=(scaler is not None)):
+            with torch.cuda.amp.autocast(enabled=(scaler is not None)):
                 outputs = model(imgs)
 
             loss = 0.0
