@@ -1,4 +1,5 @@
 import os
+import csv
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -55,6 +56,12 @@ def train():
     best_val_acc = 0.0
     save_suffix = make_suffix(args.train_distortion)
 
+    # 日志CSV初始化
+    csv_log_path = os.path.join(Config.results_save_path, f'train_log{save_suffix}.csv')
+    with open(csv_log_path, mode='w', newline='') as csv_file:
+        writer = csv.writer(csv_file)
+        writer.writerow(['epoch', 'train_acc', 'val_acc'])  # header
+
     for epoch in range(1, Config.num_epochs + 1):
         model.train()
         running_loss = 0.0
@@ -104,6 +111,11 @@ def train():
         print(f'Epoch [{epoch}/{Config.num_epochs}] '
               f'Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}% '
               f'| Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.2f}%')
+
+        # 保存当前 epoch 数据到 CSV
+        with open(csv_log_path, mode='a', newline='') as csv_file:
+            writer = csv.writer(csv_file)
+            writer.writerow([epoch, f"{train_acc:.2f}", f"{val_acc:.2f}"])
 
         if val_acc > best_val_acc:
             best_val_acc = val_acc
