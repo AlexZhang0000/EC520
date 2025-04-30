@@ -7,3 +7,4 @@ seaborn
 tqdm
 albumentations
 gdown
+pandas>=1.3.0
