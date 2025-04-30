@@ -30,8 +30,8 @@ class ApplyAliasing(torch.nn.Module):
     def forward(self, img):
         w, h = img.size
         new_w, new_h = w // self.factor, h // self.factor
-        img = img.resize((new_w, new_h), resample=Image.NEAREST)  # 最差插值缩小
-        img = img.resize((w, h), resample=Image.NEAREST)          # 最差插值放大回32x32
+        img = img.resize((new_w, new_h), resample=Image.NEAREST)
+        img = img.resize((w, h), resample=Image.NEAREST)
         return img
 
     def __repr__(self):
@@ -80,6 +80,7 @@ class CIFAR10Dataset(Dataset):
 
         # 定义 transform
         transform_list = []
+        tensor_transforms = []
 
         if self.mode == 'train':
             transform_list += [
@@ -87,7 +88,6 @@ class CIFAR10Dataset(Dataset):
                 transforms.RandomHorizontalFlip()
             ]
 
-        # 插入失真
         if self.distortion:
             distortions = self.distortion.split('/')
             for d in distortions:
@@ -97,24 +97,27 @@ class CIFAR10Dataset(Dataset):
                     kernel_size = int(kernel_size)
                     sigma = float(sigma)
                     transform_list.append(transforms.GaussianBlur(kernel_size=kernel_size, sigma=sigma))
-                elif 'gaussiannoise' in d:
-                    params = d.split(':')[1]
-                    mean, std = params.split(',')
-                    mean = float(mean)
-                    std = float(std)
-                    transform_list.append(AddGaussianNoise(mean=mean, std=std))
                 elif 'aliasing' in d:
                     factor = int(d.split(':')[1])
                     transform_list.append(ApplyAliasing(factor=factor))
                 elif 'jpegcompression' in d:
                     quality = int(d.split(':')[1])
                     transform_list.append(ApplyJPEGCompression(quality=quality))
+                elif 'gaussiannoise' in d:
+                    params = d.split(':')[1]
+                    mean, std = params.split(',')
+                    mean = float(mean)
+                    std = float(std)
+                    tensor_transforms.append(AddGaussianNoise(mean=mean, std=std))
                 else:
                     raise ValueError(f"Unsupported distortion type: {d}")
 
-        # 最后 ToTensor + Normalize
+        # 顺序：PIL变换 → ToTensor → Tensor变换 → Normalize
         transform_list += [
-            transforms.ToTensor(),
+            transforms.ToTensor()
+        ]
+        transform_list += tensor_transforms
+        transform_list += [
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ]
 
@@ -152,6 +155,7 @@ def get_loader(data_path, batch_size, mode='train', shuffle=True, num_workers=2,
         num_workers=num_workers
     )
     return dataloader
+
 
 
 
