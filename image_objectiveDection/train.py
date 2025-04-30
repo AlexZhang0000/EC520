@@ -1,4 +1,4 @@
-# --- train_safe_improved.py (完整正式版，reshape正确+label安全检查+pred_box有效性检查，多尺度版) ---
+# --- train_safe_improved.py (多GPU支持 + 自动batch size调整) ---
 
 import os
 import argparse
@@ -50,13 +50,23 @@ class CIoULoss(nn.Module):
 
 def train(train_distortion=None):
     set_seed(Config.seed)
-    print(f"✅ Using device: {Config.device}")
-    device = Config.device
 
-    train_loader = get_loader(batch_size=Config.batch_size, mode='train', distortion=train_distortion, pin_memory=True)
-    val_loader = get_loader(batch_size=Config.batch_size, mode='val', distortion=None, pin_memory=True)
+    # ✅ 多GPU支持 + 自动batch_size调整
+    num_gpus = torch.cuda.device_count()
+    device = torch.device("cuda" if num_gpus > 0 else "cpu")
+    print(f"✅ Found {num_gpus} GPU(s). Using device: {device}")
 
-    model = YOLOv5Backbone(num_classes=Config.num_classes).to(device)
+    effective_batch_size = Config.batch_size * max(1, num_gpus)
+    print(f"✅ Effective Batch Size: {effective_batch_size}")
+
+    train_loader = get_loader(batch_size=effective_batch_size, mode='train', distortion=train_distortion, pin_memory=True)
+    val_loader = get_loader(batch_size=effective_batch_size, mode='val', distortion=None, pin_memory=True)
+
+    model = YOLOv5Backbone(num_classes=Config.num_classes)
+    if num_gpus > 1:
+        model = nn.DataParallel(model)
+    model = model.to(device)
+
     bce_loss = nn.BCEWithLogitsLoss()
     box_loss = CIoULoss()
 
@@ -153,7 +163,6 @@ def train(train_distortion=None):
                 total_loss += loss.item()
 
         scheduler.step()
-
         avg_loss = total_loss / len(train_loader)
 
         model.eval()
@@ -187,6 +196,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     train(train_distortion=args.train_distortion)
+
 
 
 
