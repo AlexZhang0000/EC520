@@ -13,9 +13,7 @@ def get_miou_from_txt(path):
                     return None
     return None
 
-heavy = [
-    ("gaussianblur:9,4.0", "_distorted_gaussianblur_9_4.0"),
-    ("gaussiannoise:0,0.25", "_distorted_gaussiannoise_0_0.25"),
+distortions = [
     ("aliasing:8", "_distorted_aliasing_8"),
     ("jpegcompression:5", "_distorted_jpegcompression_5")
 ]
@@ -23,7 +21,7 @@ heavy = [
 acc_clean_on_clean = get_miou_from_txt('./results/test_log_clean.txt')
 rows = []
 
-for test_d, model_suffix in heavy:
+for test_d, model_suffix in distortions:
     tag = test_d.replace(":", "_").replace(",", "_")
     acc_clean_on_dist = get_miou_from_txt(f'./results/test_log_clean_{tag}.txt')
     acc_model_on_clean = get_miou_from_txt(f'./results/test_log{model_suffix}_clean.txt')
@@ -40,5 +38,5 @@ for test_d, model_suffix in heavy:
         'Robustness (DistModel/DistData ÷ CleanModel/CleanData)': robustness
     })
 
-pd.DataFrame(rows).to_csv('./results/robustness_heavy_only.csv', index=False)
-print("✅ Saved ./results/robustness_heavy_only.csv")
+pd.DataFrame(rows).to_csv('./results/robustness_aliasing_jpeg.csv', index=False)
+print("✅ Saved ./results/robustness_aliasing_jpeg.csv")
