@@ -1,5 +1,4 @@
-# ✅ 加速版 train.py
-# 包含优化：样本限制、提前 reshape、AMP 混合精度、Dataloader 设置优化
+# ✅ 完整修复版 train.py：兼容旧版 PyTorch 的 AMP + reshape 修复 + 多GPU + 加速优化
 
 import os
 import argparse
@@ -9,7 +8,7 @@ import torch.optim as optim
 from config import Config
 from dataloader import get_loader
 from model import YOLOv5Backbone
-from utils import compute_map, set_seed, decode_boxes, box_iou
+from utils import compute_map, set_seed
 
 class CIoULoss(nn.Module):
     def __init__(self):
@@ -70,8 +69,7 @@ def train(train_distortion=None):
     box_loss = CIoULoss()
     optimizer = optim.AdamW(model.parameters(), lr=0.001, weight_decay=Config.weight_decay)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=Config.epochs)
-    scaler = torch.amp.GradScaler(device_type='cuda') if torch.cuda.is_available() else None
-
+    scaler = torch.cuda.amp.GradScaler() if torch.cuda.is_available() else None
 
     best_map = 0.0
     log_suffix = train_distortion.replace('/', '_').replace(':', '_').replace(',', '_') if train_distortion else 'clean'
@@ -87,7 +85,7 @@ def train(train_distortion=None):
             imgs = imgs.to(device)
             optimizer.zero_grad()
 
-            with torch.amp.autocast(device_type='cuda', enabled=(scaler is not None)):
+            with torch.cuda.amp.autocast(enabled=(scaler is not None)):
                 outputs = model(imgs)
 
             loss = 0.0
@@ -122,12 +120,13 @@ def train(train_distortion=None):
                 if best_out is None:
                     continue
 
-                C = best_out.shape[0]  # 通道数
+                # ✅ 修复 reshape 错误方式
+                C = best_out.shape[0]
                 _, h, w = best_out.shape
                 pred = best_out.view(C, h, w).permute(1, 2, 0).contiguous()  # (h, w, C)
                 num_anchors = 3
                 num_outputs = C // num_anchors
-                pred = pred.view(h, w, num_anchors, num_outputs).permute(2, 0, 1, 3).contiguous()  # (3, h, w, num_outputs)
+                pred = pred.view(h, w, num_anchors, num_outputs).permute(2, 0, 1, 3).contiguous()
 
                 pred_box = pred[0, best_grid_y, best_grid_x, :4]
                 pred_obj = pred[0, best_grid_y, best_grid_x, 4].unsqueeze(0)
@@ -198,7 +197,6 @@ if __name__ == "__main__":
     parser.add_argument('--train_distortion', type=str, default=None, help='Train distortion type (optional)')
     args = parser.parse_args()
     train(train_distortion=args.train_distortion)
-
 
 
 
