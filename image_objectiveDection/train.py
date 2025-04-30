@@ -1,5 +1,3 @@
-# --- train_safe_improved.py (多GPU支持 + 自动batch size调整) ---
-
 import os
 import argparse
 import torch
@@ -51,7 +49,6 @@ class CIoULoss(nn.Module):
 def train(train_distortion=None):
     set_seed(Config.seed)
 
-    # ✅ 多GPU支持 + 自动batch_size调整
     num_gpus = torch.cuda.device_count()
     device = torch.device("cuda" if num_gpus > 0 else "cpu")
     print(f"✅ Found {num_gpus} GPU(s). Using device: {device}")
@@ -75,6 +72,12 @@ def train(train_distortion=None):
 
     best_map = 0.0
 
+    # ✅ 初始化 CSV 日志文件
+    log_suffix = train_distortion.replace('/', '_').replace(':', '_').replace(',', '_') if train_distortion else 'clean'
+    log_path = os.path.join(Config.result_save_dir, f"train_log_{log_suffix}.csv")
+    with open(log_path, 'w') as f:
+        f.write("epoch,val_map\n")
+
     for epoch in range(1, Config.epochs + 1):
         model.train()
         total_loss = 0.0
@@ -82,7 +85,7 @@ def train(train_distortion=None):
         for imgs, targets, labels in train_loader:
             imgs = imgs.to(device)
             optimizer.zero_grad()
-            outputs = model(imgs)  # [high-res, low-res]
+            outputs = model(imgs)
 
             loss = None
             batch_size = imgs.size(0)
@@ -182,11 +185,16 @@ def train(train_distortion=None):
 
         print(f"🧹 Epoch [{epoch}/{Config.epochs}] | Loss: {avg_loss:.6f} | Val mAP: {mAP:.8f} | Precision: {precision:.8f} | Recall: {recall:.4f}")
 
+        # ✅ 保存最佳模型
         if mAP > best_map:
             best_map = mAP
             save_filename = f"best_model{'_' + train_distortion if train_distortion else '_clean'}.pth"
             save_path = os.path.join(Config.model_save_path, save_filename)
             torch.save(model.state_dict(), save_path)
+
+        # ✅ 保存日志记录
+        with open(log_path, 'a') as f:
+            f.write(f"{epoch},{mAP:.8f}\n")
 
     print("✅ Training finished.")
 
