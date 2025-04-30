@@ -30,21 +30,32 @@ def evaluate():
 
     test_loader = get_loader(Config.test_data_dir, batch_size=Config.batch_size, mode='test', distortion=args.test_distortion)
 
-    # === 自动兼容多GPU保存的模型 ===
     model = ResNet18(num_classes=Config.num_classes)
-    if torch.cuda.device_count() > 1:
-        model = torch.nn.DataParallel(model)
-    model = model.to(Config.device)
-
     model_path = os.path.join(Config.model_save_path, f'best_model{args.model_suffix}.pth')
     state_dict = torch.load(model_path)
 
-    # 自动去除 module. 前缀（如果存在）
-    new_state_dict = {}
-    for k, v in state_dict.items():
-        new_k = k.replace("module.", "") if k.startswith("module.") else k
-        new_state_dict[new_k] = v
-    model.load_state_dict(new_state_dict)
+    # === 自动判断是否使用 DataParallel 并加载正确的参数 ===
+    is_parallel_state = any(k.startswith("module.") for k in state_dict.keys())
+
+    if is_parallel_state:
+        model = torch.nn.DataParallel(model)
+
+    model = model.to(Config.device)
+
+    # 处理键名不匹配问题
+    model_keys_parallel = any(k.startswith("module.") for k in model.state_dict().keys())
+    if model_keys_parallel and not is_parallel_state:
+        # 模型是 DataParallel，但权重没加 module.，手动加上
+        new_state_dict = {"module." + k: v for k, v in state_dict.items()}
+        model.load_state_dict(new_state_dict)
+    elif not model_keys_parallel and is_parallel_state:
+        # 模型非并行，但权重有 module.，去掉
+        new_state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
+        model.load_state_dict(new_state_dict)
+    else:
+        # 两者匹配，直接加载
+        model.load_state_dict(state_dict)
+
     model.eval()
 
     all_preds = []
@@ -87,6 +98,7 @@ def evaluate():
 
 if __name__ == '__main__':
     evaluate()
+
 
 
 
