@@ -1,4 +1,4 @@
-# --- test_fast_improved.py ---
+# --- test_fast_improved.py (保存测试结果到TXT文件) ---
 
 import os
 import argparse
@@ -10,20 +10,20 @@ from model import YOLOv5Backbone
 from utils import compute_map, set_seed
 
 @torch.no_grad()
-def test():
+def test(model_suffix="_clean", test_distortion=None):
     set_seed(Config.seed)
 
     print(f"✅ Using device: {Config.device}")
     device = Config.device
 
-    val_loader = get_loader(batch_size=Config.batch_size, mode='val', distortion=None, pin_memory=True)
+    val_loader = get_loader(batch_size=Config.batch_size, mode='val', distortion=test_distortion, pin_memory=True)
 
     model = YOLOv5Backbone(num_classes=Config.num_classes).to(device)
 
-    # 加载最优权重
-    best_model_path = os.path.join(Config.model_save_path, "best_model_clean.pth")
-    assert os.path.exists(best_model_path), f"Model not found: {best_model_path}"
-    model.load_state_dict(torch.load(best_model_path, map_location=device))
+    # 加载模型权重
+    model_path = os.path.join(Config.model_save_path, f"best_model{model_suffix}.pth")
+    assert os.path.exists(model_path), f"Model not found: {model_path}"
+    model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval()
 
     preds_all = []
@@ -32,10 +32,7 @@ def test():
     for imgs, targets, labels in val_loader:
         imgs = imgs.to(device)
         outputs = model(imgs)
-
-        # 只用高分辨率 head 输出（20x20）
         preds = outputs[0]
-
         for pred, target_list in zip(preds, targets):
             preds_all.append(pred)
             targets_all.append(target_list)
@@ -47,8 +44,23 @@ def test():
     print(f"Precision: {precision:.8f}")
     print(f"Recall: {recall:.4f}")
 
+    # ✅ 保存结果为 .txt 文件
+    log_name = f"test_log{model_suffix}.txt"
+    log_path = os.path.join(Config.result_save_dir, log_name)
+    with open(log_path, 'w') as f:
+        f.write(f"Model: {model_suffix}\n")
+        f.write(f"Val mAP: {mAP:.8f}\n")
+        f.write(f"Precision: {precision:.8f}\n")
+        f.write(f"Recall: {recall:.4f}\n")
+    print(f"📁 Test log saved to {log_path}")
+
 if __name__ == "__main__":
-    test()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--model_suffix', type=str, default="_clean", help='Suffix of model file to load')
+    parser.add_argument('--test_distortion', type=str, default=None, help='Distortion type applied in validation')
+    args = parser.parse_args()
+
+    test(model_suffix=args.model_suffix, test_distortion=args.test_distortion)
 
 
 
