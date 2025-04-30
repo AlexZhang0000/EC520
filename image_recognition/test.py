@@ -30,9 +30,21 @@ def evaluate():
 
     test_loader = get_loader(Config.test_data_dir, batch_size=Config.batch_size, mode='test', distortion=args.test_distortion)
 
-    model = ResNet18(num_classes=Config.num_classes).to(Config.device)
+    # === 自动兼容多GPU保存的模型 ===
+    model = ResNet18(num_classes=Config.num_classes)
+    if torch.cuda.device_count() > 1:
+        model = torch.nn.DataParallel(model)
+    model = model.to(Config.device)
+
     model_path = os.path.join(Config.model_save_path, f'best_model{args.model_suffix}.pth')
-    model.load_state_dict(torch.load(model_path))
+    state_dict = torch.load(model_path)
+
+    # 自动去除 module. 前缀（如果存在）
+    new_state_dict = {}
+    for k, v in state_dict.items():
+        new_k = k.replace("module.", "") if k.startswith("module.") else k
+        new_state_dict[new_k] = v
+    model.load_state_dict(new_state_dict)
     model.eval()
 
     all_preds = []
@@ -75,5 +87,6 @@ def evaluate():
 
 if __name__ == '__main__':
     evaluate()
+
 
 
