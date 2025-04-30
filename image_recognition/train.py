@@ -29,17 +29,30 @@ def train():
     os.makedirs(Config.model_save_path, exist_ok=True)
     os.makedirs(Config.results_save_path, exist_ok=True)
 
-    # Prepare data loaders
-    train_loader = get_loader(Config.train_data_dir, batch_size=Config.batch_size, mode='train', distortion=args.train_distortion)
-    val_loader = get_loader(Config.test_data_dir, batch_size=Config.batch_size, mode='val', distortion=None)  # validation always clean!
+    # === 自动检测 GPU 数量并更新 device 和 batch_size ===
+    num_gpus = torch.cuda.device_count()
+    print(f"✅ Detected {num_gpus} GPU(s)")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model = ResNet18(num_classes=Config.num_classes).to(Config.device)
+    # 动态 batch size
+    batch_size = Config.batch_size * num_gpus if num_gpus > 0 else Config.batch_size
+
+    # Prepare data loaders
+    train_loader = get_loader(Config.train_data_dir, batch_size=batch_size, mode='train', distortion=args.train_distortion)
+    val_loader = get_loader(Config.test_data_dir, batch_size=batch_size, mode='val', distortion=None)  # validation always clean!
+
+    model = ResNet18(num_classes=Config.num_classes)
+
+    # 多GPU支持
+    if num_gpus > 1:
+        model = nn.DataParallel(model)
+    model = model.to(device)
+
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=Config.learning_rate,
                           momentum=Config.momentum, weight_decay=Config.weight_decay)
 
     best_val_acc = 0.0
-
     save_suffix = make_suffix(args.train_distortion)
 
     for epoch in range(1, Config.num_epochs + 1):
@@ -49,8 +62,8 @@ def train():
         total = 0
 
         for images, labels in train_loader:
-            images = images.to(Config.device)
-            labels = labels.to(Config.device)
+            images = images.to(device)
+            labels = labels.to(device)
 
             outputs = model(images)
             loss = criterion(outputs, labels)
@@ -67,15 +80,15 @@ def train():
         train_loss = running_loss / total
         train_acc = 100. * correct / total
 
-        # Validation (always clean val set)
+        # Validation
         model.eval()
         val_loss = 0.0
         val_correct = 0
         val_total = 0
         with torch.no_grad():
             for images, labels in val_loader:
-                images = images.to(Config.device)
-                labels = labels.to(Config.device)
+                images = images.to(device)
+                labels = labels.to(device)
 
                 outputs = model(images)
                 loss = criterion(outputs, labels)
@@ -97,9 +110,10 @@ def train():
             save_name = f"best_model{save_suffix}.pth"
             torch.save(model.state_dict(), os.path.join(Config.model_save_path, save_name))
 
-    print('Training finished.')
+    print('✅ Training finished.')
 
 if __name__ == '__main__':
     train()
+
 
 
