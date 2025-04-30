@@ -16,18 +16,18 @@ echo "=============== TRAINING PHASE ==============="
 echo "=============== TESTING PHASE ==============="
 
 # Clean model → clean data
- python test.py --model_suffix _clean
+python test.py --model_suffix _clean
 
 # Clean model → distorted datasets
- python test.py --model_suffix _clean --test_distortion aliasing:8
- python test.py --model_suffix _clean --test_distortion jpegcompression:5
+python test.py --model_suffix _clean --test_distortion aliasing:8
+python test.py --model_suffix _clean --test_distortion jpegcompression:5
 
 # Distorted model → clean data
-python test.py --model_suffix _aliasing_8
-python test.py --model_suffix _jpegcompression_5
+python test.py --model_suffix ':8'
+python test.py --model_suffix ':5'
 
 # Distorted model → same distortion dataset
-python test.py --model_suffix _aliasing_8 --test_distortion aliasing:8
-python test.py --model_suffix _jpegcompression_5 --test_distortion jpegcompression:5
+python test.py --model_suffix ':8' --test_distortion aliasing:8
+python test.py --model_suffix ':5' --test_distortion jpegcompression:5
 
 echo "✅ All training and testing complete."
