@@ -1,54 +1,77 @@
 #!/bin/bash
+set -e
 
-# Distortion参数
-declare -a distortions=(
-    "gaussianblur:3,0.8"
-    "gaussianblur:5,2.0"
-    "gaussianblur:9,4.0"
-    "gaussiannoise:0,0.02"
-    "gaussiannoise:0,0.1"
-    "gaussiannoise:0,0.25"
-    "aliasing:2"
-    "aliasing:4"
-    "aliasing:8"
-    "jpegcompression:60"
-    "jpegcompression:20"
-    "jpegcompression:5"
-)
+echo "=============== TRAINING PHASE ==============="
 
-# ============ TRAINING ============
-echo "🚀 Training clean model..."
+# --- Clean training ---
 python train.py
 
-for d in "${distortions[@]}"; do
-    echo "🚀 Training with distortion: $d"
-    python train.py --train_distortion "$d"
-done
+# --- Gaussian Blur ---
+python train.py --train_distortion gaussianblur:3,0.8
+python train.py --train_distortion gaussianblur:5,2.0
+python train.py --train_distortion gaussianblur:9,4.0
 
-# ============ TESTING ============
+# --- Gaussian Noise ---
+python train.py --train_distortion gaussiannoise:0,0.02
+python train.py --train_distortion gaussiannoise:0,0.1
+python train.py --train_distortion gaussiannoise:0,0.25
 
-# 1. clean model + clean data
-echo "🧪 Testing clean model on clean data"
-python test.py --model_path saved_models/best_model.pth
+# --- Aliasing ---
+python train.py --train_distortion aliasing:2
+python train.py --train_distortion aliasing:4
+python train.py --train_distortion aliasing:8
 
-# 2. clean model + 12 distorted datasets
-for d in "${distortions[@]}"; do
-    echo "🧪 Testing clean model on distorted data: $d"
-    python test.py --model_path saved_models/best_model.pth --distortion "$d"
-done
+# --- JPEG Compression ---
+python train.py --train_distortion jpegcompression:60
+python train.py --train_distortion jpegcompression:20
+python train.py --train_distortion jpegcompression:5
 
-# 3. 12 distorted models + clean data
-for d in "${distortions[@]}"; do
-    suffix=$(echo "$d" | sed 's/:/_/g' | sed 's/\//_/g')
-    echo "🧪 Testing distorted model ($d) on clean data"
-    python test.py --model_path "saved_models/best_model_distorted_${suffix}.pth"
-done
+echo "=============== TESTING PHASE ==============="
 
-# 4. 12 distorted models + corresponding distorted data
-for d in "${distortions[@]}"; do
-    suffix=$(echo "$d" | sed 's/:/_/g' | sed 's/\//_/g')
-    echo "🧪 Testing distorted model ($d) on same distorted data"
-    python test.py --model_path "saved_models/best_model_distorted_${suffix}.pth" --distortion "$d"
-done
+# --- Clean model → Clean data ---
+python test.py --model_suffix _clean
+
+# --- Clean model → Distorted data ---
+python test.py --model_suffix _clean --test_distortion gaussianblur:3,0.8
+python test.py --model_suffix _clean --test_distortion gaussianblur:5,2.0
+python test.py --model_suffix _clean --test_distortion gaussianblur:9,4.0
+python test.py --model_suffix _clean --test_distortion gaussiannoise:0,0.02
+python test.py --model_suffix _clean --test_distortion gaussiannoise:0,0.1
+python test.py --model_suffix _clean --test_distortion gaussiannoise:0,0.25
+python test.py --model_suffix _clean --test_distortion aliasing:2
+python test.py --model_suffix _clean --test_distortion aliasing:4
+python test.py --model_suffix _clean --test_distortion aliasing:8
+python test.py --model_suffix _clean --test_distortion jpegcompression:60
+python test.py --model_suffix _clean --test_distortion jpegcompression:20
+python test.py --model_suffix _clean --test_distortion jpegcompression:5
+
+# --- Distorted model → Clean data ---
+python test.py --model_suffix _distorted_gaussianblur_3_0.8
+python test.py --model_suffix _distorted_gaussianblur_5_2.0
+python test.py --model_suffix _distorted_gaussianblur_9_4.0
+python test.py --model_suffix _distorted_gaussiannoise_0_0.02
+python test.py --model_suffix _distorted_gaussiannoise_0_0.1
+python test.py --model_suffix _distorted_gaussiannoise_0_0.25
+python test.py --model_suffix _distorted_aliasing_2
+python test.py --model_suffix _distorted_aliasing_4
+python test.py --model_suffix _distorted_aliasing_8
+python test.py --model_suffix _distorted_jpegcompression_60
+python test.py --model_suffix _distorted_jpegcompression_20
+python test.py --model_suffix _distorted_jpegcompression_5
+
+# --- Distorted model → Same distortion data ---
+python test.py --model_suffix _distorted_gaussianblur_3_0.8 --test_distortion gaussianblur:3,0.8
+python test.py --model_suffix _distorted_gaussianblur_5_2.0 --test_distortion gaussianblur:5,2.0
+python test.py --model_suffix _distorted_gaussianblur_9_4.0 --test_distortion gaussianblur:9,4.0
+python test.py --model_suffix _distorted_gaussiannoise_0_0.02 --test_distortion gaussiannoise:0,0.02
+python test.py --model_suffix _distorted_gaussiannoise_0_0.1 --test_distortion gaussiannoise:0,0.1
+python test.py --model_suffix _distorted_gaussiannoise_0_0.25 --test_distortion gaussiannoise:0,0.25
+python test.py --model_suffix _distorted_aliasing_2 --test_distortion aliasing:2
+python test.py --model_suffix _distorted_aliasing_4 --test_distortion aliasing:4
+python test.py --model_suffix _distorted_aliasing_8 --test_distortion aliasing:8
+python test.py --model_suffix _distorted_jpegcompression_60 --test_distortion jpegcompression:60
+python test.py --model_suffix _distorted_jpegcompression_20 --test_distortion jpegcompression:20
+python test.py --model_suffix _distorted_jpegcompression_5 --test_distortion jpegcompression:5
 
 echo "✅ All training and testing complete."
+
