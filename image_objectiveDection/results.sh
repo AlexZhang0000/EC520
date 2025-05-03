@@ -4,14 +4,14 @@ set -e
 echo "=============== TRAINING PHASE ==============="
 
 # --- Clean training ---
-# python train.py
+ python train.py
 
 
 # --- Aliasing ---
-# python train.py --train_distortion aliasing:8
+ python train.py --train_distortion aliasing:8
 
 # --- JPEG Compression ---
-# python train.py --train_distortion jpegcompression:5
+ python train.py --train_distortion jpegcompression:5
 
 echo "=============== TESTING PHASE ==============="
 
