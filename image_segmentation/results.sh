@@ -4,27 +4,27 @@ set -e
 echo "=============== TRAINING PHASE ==============="
 
 # --- Clean training ---
-# python train.py
+ python train.py
 
 # --- Gaussian Blur ---
-# python train.py --train_distortion gaussianblur:3,0.8
-# python train.py --train_distortion gaussianblur:5,2.0
-# python train.py --train_distortion gaussianblur:9,4.0
+ python train.py --train_distortion gaussianblur:3,0.8
+ python train.py --train_distortion gaussianblur:5,2.0
+ python train.py --train_distortion gaussianblur:9,4.0
 
 # --- Gaussian Noise ---
-# python train.py --train_distortion gaussiannoise:0,0.02
-# python train.py --train_distortion gaussiannoise:0,0.1
-# python train.py --train_distortion gaussiannoise:0,0.25
+ python train.py --train_distortion gaussiannoise:0,0.02
+ python train.py --train_distortion gaussiannoise:0,0.1
+ python train.py --train_distortion gaussiannoise:0,0.25
 
 # --- Aliasing ---
-# python train.py --train_distortion aliasing:2
-# python train.py --train_distortion aliasing:4
-# python train.py --train_distortion aliasing:8
+ python train.py --train_distortion aliasing:2
+ python train.py --train_distortion aliasing:4
+ python train.py --train_distortion aliasing:8
 
 # --- JPEG Compression ---
-# python train.py --train_distortion jpegcompression:60
-# python train.py --train_distortion jpegcompression:20
-# python train.py --train_distortion jpegcompression:5
+ python train.py --train_distortion jpegcompression:60
+ python train.py --train_distortion jpegcompression:20
+ python train.py --train_distortion jpegcompression:5
 
 echo "=============== TESTING PHASE ==============="
 
